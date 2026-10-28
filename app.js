@@ -514,8 +514,50 @@ async function askClaude(system, content) {
   return text;
 }
 
+function editDistance(a, b) {
+  const row = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    let prev = row[0];
+    row[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cur = row[j];
+      row[j] = Math.min(row[j] + 1, row[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = cur;
+    }
+  }
+  return row[b.length];
+}
+
+// Swap in the person's own words when the phone hears something close,
+// e.g. "silicon" becomes "silicone" if "silicone" is in their list.
+// Short words only get their spelling/capitals fixed, so "man" never turns into "Nan".
+function applyKnownWords(text) {
+  const list = settings.words
+    .split(",")
+    .map((w) => w.trim())
+    .filter((w) => w && !/\s/.test(w));
+  if (!list.length) return text;
+  return text.replace(/[A-Za-z'’]+/g, (word) => {
+    const lower = word.toLowerCase();
+    for (const known of list) {
+      const k = known.toLowerCase();
+      const close =
+        lower === k ||
+        (k.length >= 5 &&
+          lower[0] === k[0] &&
+          Math.abs(lower.length - k.length) <= 2 &&
+          editDistance(lower, k) <= (k.length >= 8 ? 2 : 1));
+      if (!close) continue;
+      return word[0] === word[0].toUpperCase() && known[0] === known[0].toLowerCase()
+        ? known[0].toUpperCase() + known.slice(1)
+        : known;
+    }
+    return word;
+  });
+}
+
 function basicTidy(text) {
-  const t = text.trim().replace(/\s+/g, " ");
+  const t = applyKnownWords(text.trim().replace(/\s+/g, " "));
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
