@@ -352,16 +352,11 @@ function startPhoneSpeech() {
   recognition.lang = navigator.language || "en-GB";
   recognition.continuous = true;
   recognition.interimResults = true;
-  let finalText = "";
+  let heardText = "";
   let failed = false;
   recognition.onresult = (e) => {
-    let interim = "";
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      const t = e.results[i][0].transcript;
-      if (e.results[i].isFinal) finalText += t + " ";
-      else interim += t;
-    }
-    setStatus("Hearing: " + (finalText + interim).trim());
+    heardText = joinResults(e.results);
+    setStatus("Hearing: " + heardText);
   };
   recognition.onerror = (e) => {
     if (e.error === "not-allowed" || e.error === "service-not-allowed") {
@@ -373,11 +368,36 @@ function startPhoneSpeech() {
     recognition = null;
     clearTimeout(autoStopTimer);
     setListening(false);
-    if (!failed) handleHeard(finalText.trim());
+    if (!failed) handleHeard(heardText);
   };
   recognition.start();
   autoStopTimer = setTimeout(stopListening, MAX_RECORD_MS);
   setListening(true);
+}
+
+// iPhone speech recognition often sends the whole sentence again as a new
+// result, which used to double the message. Rebuild the text from every
+// result each time and drop anything that repeats what we already have.
+function joinResults(results) {
+  let text = "";
+  for (let i = 0; i < results.length; i++) {
+    const s = results[i][0].transcript.trim();
+    if (!s) continue;
+    const have = text.toLowerCase();
+    const next = s.toLowerCase();
+    if (next.startsWith(have)) text = s;
+    else if (!have.endsWith(next)) text += " " + s;
+  }
+  return removeDoubledText(text.trim());
+}
+
+function removeDoubledText(text) {
+  const words = text.split(/\s+/);
+  if (words.length < 2 || words.length % 2) return text;
+  const half = words.length / 2;
+  const a = words.slice(0, half).join(" ");
+  const b = words.slice(half).join(" ");
+  return a.toLowerCase() === b.toLowerCase() ? a : text;
 }
 
 function setBusy(on, message = "") {

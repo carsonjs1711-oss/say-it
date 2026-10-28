@@ -213,7 +213,7 @@ svg { width: 1.4em; height: 1.4em; fill: none; stroke: currentColor; stroke-widt
 .check { display: flex; align-items: center; gap: 10px; }
 .check input { width: 24px; height: 24px; }
 .hint { margin: 0; font-size: 0.85rem; color: var(--muted); }
-.sheet-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; }
+.sheet-actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 8px; }
 .primary, .ghost, .wide-btn { border-radius: 999px; padding: 12px 22px; font-weight: 600; }
 .primary { background: var(--accent); color: var(--surface); border: none; }
 .ghost { background: none; border: 1px solid var(--line); }
@@ -236,3 +236,4 @@ svg { width: 1.4em; height: 1.4em; fill: none; stroke: currentColor; stroke-widt
   .mic { width: 92px; height: 92px; }
   .send { height: 64px; font-size: 1.05rem; }
 }
+.version { margin-right: auto; }
