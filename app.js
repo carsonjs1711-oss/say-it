@@ -195,6 +195,15 @@ function renderPeople() {
   add.setAttribute("aria-label", "Add a person");
   add.addEventListener("click", openPersonDialog);
   el.people.append(add);
+
+  if (state.to === null) {
+    const tip = document.createElement("p");
+    tip.className = "people-tip";
+    tip.textContent = people.length
+      ? "Or tap no one, and pick from your contacts after you tap Send."
+      : "No need to add anyone. Tap Send and pick from your contacts in Messages.";
+    el.people.append(tip);
+  }
 }
 
 function renderPhrases() {
@@ -635,7 +644,7 @@ function send() {
   setStatus(
     person
       ? `Your Messages app is opening with the text to ${person.name}. Tap send there.`
-      : "Your Messages app is opening. Pick who it's to, then tap send there."
+      : "Your Messages app is opening. In the To box, start typing their name and pick them, then tap send."
   );
 }
 
