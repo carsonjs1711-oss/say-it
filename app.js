@@ -45,7 +45,21 @@ const AVATAR_COLOURS = ["#2c5a99", "#16704a", "#8a3fa0", "#b0521d", "#1f7d8c", "
 const settings = { ...DEFAULT_SETTINGS, ...store.get("settings", {}) };
 let people = store.get("people", []);
 const phrases = store.get("phrases", DEFAULT_PHRASES);
+// Words the phone often mishears on site. Added once; people can remove them in Settings.
+const DEFAULT_FIXES = {
+  silicon: "silicone",
+  sicker: "sikka",
+  sticker: "sikka",
+  sika: "sikka",
+  qa: "QA",
+  pc: "PC",
+};
 let fixes = store.get("fixes", {}); // heard word -> word they meant, e.g. silicon -> silicone
+if (!store.get("defaultFixesAdded", false)) {
+  fixes = { ...DEFAULT_FIXES, ...fixes };
+  store.set("fixes", fixes);
+  store.set("defaultFixesAdded", true);
+}
 
 const state = {
   to: null, // index into people
