@@ -275,12 +275,19 @@ function emailing() {
 }
 
 // ---------- Styles ----------
+// Always shown, so people can find them; without the tidy-up key they explain what's missing
 function renderModes() {
-  el.modes.hidden = !settings.anthropicKey;
-  el.modeBtns.forEach((b) => b.setAttribute("aria-checked", String(b.dataset.mode === settings.mode)));
+  el.modes.classList.toggle("locked", !settings.anthropicKey);
+  el.modeBtns.forEach((b) =>
+    b.setAttribute("aria-checked", String(!!settings.anthropicKey && b.dataset.mode === settings.mode))
+  );
 }
 
 async function setMode(mode) {
+  if (!settings.anthropicKey) {
+    setStatus("Styles need the tidy-up key. Add it in Settings → Tidy-up key (Anthropic) on this copy of Say It.", "error");
+    return;
+  }
   if (mode === settings.mode || state.busy || isListening()) return;
   settings.mode = mode;
   store.set("settings", settings);
