@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Say It</title>
+  <meta name="description" content="Speak your text message. Say It writes it out, reads it back, and sends it from your own phone number.">
+  <meta name="theme-color" content="#eef2f6" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#141a22" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Say It">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <header class="top">
+      <h1 class="brand">Say It</h1>
+      <button class="icon-btn" id="openSettings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+        <span>Settings</span>
+      </button>
+    </header>
+
+    <section class="to" aria-labelledby="toLabel">
+      <h2 id="toLabel" class="label">Send to</h2>
+      <div class="people" id="people" role="list"></div>
+    </section>
+
+    <section class="message-wrap" aria-label="Your message">
+      <div class="message" id="message" aria-live="polite"></div>
+      <textarea class="message-edit" id="messageEdit" rows="5" aria-label="Type to change your message" hidden></textarea>
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+
+      <div class="tools" id="tools" hidden>
+        <button class="tool" id="readBtn">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+          <span id="readLabel">Read to me</span>
+        </button>
+        <button class="tool" id="changeBtn">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/><path d="m17 3 3 3"/></svg>
+          <span>Change it</span>
+        </button>
+        <button class="tool" id="typeBtn">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg>
+          <span id="typeLabel">Type</span>
+        </button>
+        <button class="tool" id="originalBtn">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-2"/></svg>
+          <span id="originalLabel">What I said</span>
+        </button>
+        <button class="tool" id="clearBtn">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
+          <span>Start again</span>
+        </button>
+      </div>
+    </section>
+
+    <section class="phrases" aria-labelledby="phrasesLabel">
+      <h2 id="phrasesLabel" class="label">Quick messages</h2>
+      <div class="chips" id="phrases"></div>
+    </section>
+  </div>
+
+  <div class="dock">
+    <div class="dock-inner">
+      <button class="mic" id="micBtn" aria-label="Start speaking">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+        <span class="mic-label" id="micLabel">Speak</span>
+      </button>
+      <button class="send" id="sendBtn" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12 16-8-6 16-2.5-6.5L4 12Z"/></svg>
+        <span id="sendLabel">Send</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Add a person -->
+  <dialog id="personDialog" class="sheet" aria-labelledby="personTitle">
+    <form method="dialog" id="personForm">
+      <h2 id="personTitle">Add a person</h2>
+      <button type="button" class="wide-btn" id="pickContact" hidden>Choose from my contacts</button>
+      <label for="personName">Name</label>
+      <input id="personName" autocomplete="off" required>
+      <label for="personNumber">Phone number</label>
+      <input id="personNumber" type="tel" inputmode="tel" autocomplete="off" required>
+      <div class="sheet-actions">
+        <button type="button" class="ghost" id="cancelPerson">Cancel</button>
+        <button type="submit" class="primary" id="savePerson">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Settings -->
+  <dialog id="settingsDialog" class="sheet" aria-labelledby="settingsTitle">
+    <form method="dialog" id="settingsForm">
+      <h2 id="settingsTitle">Settings</h2>
+
+      <fieldset>
+        <legend>Look</legend>
+        <label for="setSize">Text size</label>
+        <select id="setSize">
+          <option value="m">Medium</option>
+          <option value="l">Large</option>
+          <option value="xl">Extra large</option>
+        </select>
+        <label for="setTint">Background colour</label>
+        <select id="setTint">
+          <option value="blue">Soft blue</option>
+          <option value="cream">Cream</option>
+          <option value="yellow">Pale yellow</option>
+          <option value="peach">Peach</option>
+          <option value="white">White</option>
+        </select>
+        <label for="setFont">Letters</label>
+        <select id="setFont">
+          <option value="lexend">Lexend (wide, easy reading)</option>
+          <option value="atkinson">Atkinson Hyperlegible</option>
+          <option value="system">Phone's normal font</option>
+        </select>
+      </fieldset>
+
+      <fieldset>
+        <legend>Reading out loud</legend>
+        <label class="check"><input type="checkbox" id="setAutoRead"> Read my message back after I speak</label>
+        <label for="setRate">Reading speed</label>
+        <select id="setRate">
+          <option value="0.8">Slow</option>
+          <option value="1">Normal</option>
+          <option value="1.2">Fast</option>
+        </select>
+      </fieldset>
+
+      <fieldset>
+        <legend>Tidying up</legend>
+        <label for="setTidy">How much should it fix?</label>
+        <select id="setTidy">
+          <option value="light">Just spelling and full stops</option>
+          <option value="normal">Fix mistakes, keep my way of talking</option>
+        </select>
+        <label for="setWords">Names and words it should know</label>
+        <textarea id="setWords" rows="3" placeholder="Kayden, Llanelli, Nan, brekkie"></textarea>
+        <p class="hint">Separate with commas. This helps it spell names and places right.</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>People</legend>
+        <ul class="people-list" id="peopleList"></ul>
+      </fieldset>
+
+      <fieldset>
+        <legend>Service keys</legend>
+        <p class="hint">Say It uses two services. The keys stay on this phone.</p>
+        <label for="setOpenAI">Speech key (OpenAI)</label>
+        <input id="setOpenAI" type="password" autocomplete="off" spellcheck="false" placeholder="sk-...">
+        <p class="hint">Turns your voice into words. Without it, Say It uses the phone's own speech-to-text, which is the same one Siri uses.</p>
+        <label for="setAnthropic">Tidy-up key (Anthropic)</label>
+        <input id="setAnthropic" type="password" autocomplete="off" spellcheck="false" placeholder="sk-ant-...">
+        <p class="hint">Fixes spelling, punctuation and misheard words. Without it, your words go in exactly as heard.</p>
+        <p class="hint">Your voice recording goes to OpenAI and your message text goes to Anthropic so they can do this. Nothing else is stored anywhere except on this phone.</p>
+      </fieldset>
+
+      <div class="sheet-actions">
+        <button type="submit" class="primary" id="closeSettings">Done</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>

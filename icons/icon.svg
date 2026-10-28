@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#c8432a"/>
+  <path d="M120 150h272a40 40 0 0 1 40 40v130a40 40 0 0 1-40 40H230l-80 62v-62h-30a40 40 0 0 1-40-40V190a40 40 0 0 1 40-40Z" fill="#fff"/>
+  <g fill="none" stroke="#c8432a" stroke-width="26" stroke-linecap="round">
+    <path d="M196 230v40M236 205v90M276 220v60M316 240v20"/>
+  </g>
+</svg>
