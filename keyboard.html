@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Say It Keyboard Demo</title>
+  <meta name="description" content="Try how the Say It keyboard would work inside a text conversation. Nothing is sent.">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600&display=swap">
+  <style>
+    /* Phone-height column: demo banner, chat thread, reply box, keyboard pinned to the bottom. */
+    :root {
+      --bg: #ffffff;
+      --ink: #111418;
+      --muted: #6b7280;
+      --line: #e3e5e9;
+      --them: #e9e9eb;
+      --me: #1f7aec;
+      --me-ink: #ffffff;
+      --kb: #d3d6dc;
+      --key: #ffffff;
+      --key-dark: #aeb3bc;
+      --mic: #c8432a;
+      --accent: #2c5a99;
+      --banner: #fff4d6;
+      --highlight: #ffdf80;
+      --font: "Lexend", system-ui, -apple-system, sans-serif;
+      --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #000000; --ink: #f2f3f5; --muted: #9aa0a8; --line: #26282c; --them: #26262a;
+        --me: #2a84f5; --kb: #2b2b2e; --key: #5a5a5e; --key-dark: #3c3c40; --mic: #e2614a;
+        --accent: #8db4ec; --banner: #3a3214; --highlight: #7a6417;
+        color-scheme: dark;
+      }
+    }
+    :root[data-theme="dark"] {
+      --bg: #000000; --ink: #f2f3f5; --muted: #9aa0a8; --line: #26282c; --them: #26262a;
+      --me: #2a84f5; --kb: #2b2b2e; --key: #5a5a5e; --key-dark: #3c3c40; --mic: #e2614a;
+      --accent: #8db4ec; --banner: #3a3214; --highlight: #7a6417;
+      color-scheme: dark;
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    html, body { height: 100%; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sys); font-size: 17px; }
+    button { font: inherit; color: inherit; cursor: pointer; }
+    :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+    svg { width: 1.3em; height: 1.3em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+    .phone { height: 100%; max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; }
+    .banner {
+      background: var(--banner); font-family: var(--font); font-size: 0.85rem; line-height: 1.4;
+      padding-top: max(10px, env(safe-area-inset-top, 0px)); padding-bottom: 10px;
+      padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+    }
+    .banner a { color: inherit; font-weight: 600; }
+    .contact { text-align: center; padding: 10px 16px 6px; border-bottom: 1px solid var(--line); }
+    .contact .av { width: 44px; height: 44px; border-radius: 50%; background: #8e96a3; color: #fff; display: grid; place-items: center; margin: 0 auto 4px; font-weight: 600; }
+    .contact .nm { font-size: 0.8rem; color: var(--muted); }
+
+    .thread {
+      flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;
+      padding-top: 14px; padding-bottom: 14px;
+      padding-left: max(14px, env(safe-area-inset-left, 0px)); padding-right: max(14px, env(safe-area-inset-right, 0px));
+    }
+    .bubble { max-width: 78%; padding: 8px 13px; border-radius: 18px; line-height: 1.35; overflow-wrap: anywhere; }
+    .them { align-self: flex-start; background: var(--them); border-bottom-left-radius: 6px; }
+    .me { align-self: flex-end; background: var(--me); color: var(--me-ink); border-bottom-right-radius: 6px; }
+    .note { align-self: center; font-size: 0.75rem; color: var(--muted); }
+
+    .compose {
+      display: flex; align-items: flex-end; gap: 8px; border-top: 1px solid var(--line);
+      padding-top: 8px; padding-bottom: 8px;
+      padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px));
+    }
+    .field {
+      flex: 1; min-width: 0; min-height: 36px; border: 1px solid var(--line); border-radius: 18px;
+      padding: 7px 14px; line-height: 1.35; overflow-wrap: anywhere;
+    }
+    .field.empty { color: var(--muted); }
+    .send-arrow { width: 34px; height: 34px; border-radius: 50%; border: none; background: var(--me); color: #fff; display: grid; place-items: center; flex: none; }
+    .send-arrow:disabled { opacity: 0.35; }
+
+    .kb { background: var(--kb); padding-bottom: env(safe-area-inset-bottom, 0px); }
+    .kb-inner {
+      height: 300px; display: flex; flex-direction: column; gap: 8px; padding-top: 8px; padding-bottom: 8px;
+      padding-left: max(6px, env(safe-area-inset-left, 0px)); padding-right: max(6px, env(safe-area-inset-right, 0px));
+    }
+
+    /* Ordinary keyboard (not working, just to show the switch) */
+    .row { display: flex; justify-content: center; gap: 6px; }
+    .k { flex: 1; max-width: 40px; height: 44px; border-radius: 6px; background: var(--key); display: grid; place-items: center; font-size: 1.1rem; box-shadow: 0 1px 0 rgb(0 0 0 / 0.3); }
+    .k.wide { max-width: none; flex: 1.6; background: var(--key-dark); font-size: 0.9rem; }
+    .k.space { max-width: none; flex: 5; font-size: 0.9rem; }
+    .globe { border: none; }
+    .globe.hint { outline: 3px solid var(--mic); animation: nudge 1.4s ease-in-out infinite; }
+    .switch-tip { text-align: center; font-family: var(--font); font-size: 0.85rem; margin: 0; }
+
+    /* Say It keyboard */
+    .sayit { font-family: var(--font); }
+    .preview {
+      flex: 1; min-height: 0; overflow-y: auto; background: var(--key); border-radius: 10px;
+      padding: 10px 12px; font-size: 1.15rem; line-height: 1.5; word-spacing: 0.1em;
+    }
+    .preview.empty, .preview.busy { color: var(--muted); font-size: 0.95rem; }
+    .preview .w { border-radius: 5px; padding: 0 2px; margin: 0 -2px; }
+    .preview .w.on { background: var(--highlight); }
+    .controls { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; }
+    .side { display: flex; flex-direction: column; gap: 6px; }
+    .kbtn { border: none; border-radius: 10px; background: var(--key); padding: 9px 6px; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 1px 0 rgb(0 0 0 / 0.3); }
+    .kbtn.insert { background: var(--me); color: #fff; font-weight: 600; }
+    .kbtn:disabled { opacity: 0.4; }
+    .mic {
+      width: 92px; height: 92px; border-radius: 50%; border: none; background: var(--mic); color: #fff;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-weight: 600; font-size: 0.85rem;
+    }
+    .mic svg { width: 2em; height: 2em; }
+    .mic.listening { animation: pulse 1.4s ease-in-out infinite; }
+    .mic.listening svg { display: none; }
+    .mic.listening::before { content: ""; width: 22px; height: 22px; border-radius: 5px; background: currentColor; margin-bottom: 4px; }
+    .bottom-row { display: flex; align-items: center; gap: 8px; }
+    .bottom-row .globe-btn { width: 44px; height: 38px; border: none; border-radius: 8px; background: var(--key-dark); display: grid; place-items: center; }
+    .bottom-row .label { flex: 1; text-align: center; font-size: 0.75rem; color: var(--muted); }
+
+    @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--mic) 55%, transparent); } 50% { box-shadow: 0 0 0 14px transparent; } }
+    @keyframes nudge { 50% { transform: scale(1.08); } }
+    @media (prefers-reduced-motion: reduce) { .mic.listening, .globe.hint { animation: none; } }
+  </style>
+</head>
+<body>
+  <div class="phone">
+    <p class="banner" id="banner">
+      <strong>Demo.</strong> This shows how the Say It keyboard would work inside Messages. Nothing is really sent.
+      Keys and word fixes from the <a href="./">Say It app</a> are used here too.
+    </p>
+
+    <div class="contact">
+      <div class="av" aria-hidden="true">D</div>
+      <div class="nm">Dave (example)</div>
+    </div>
+
+    <div class="thread" id="thread" aria-live="polite">
+      <div class="bubble them">Can you grab the sikka from Bunnings on your way?</div>
+      <div class="bubble them">Also the bathroom needs doing after the tiler is finished</div>
+    </div>
+
+    <div class="compose">
+      <div class="field empty" id="field">Text Message</div>
+      <button class="send-arrow" id="sendArrow" aria-label="Send" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+      </button>
+    </div>
+
+    <div class="kb">
+      <!-- Ordinary keyboard -->
+      <div class="kb-inner" id="normalKb">
+        <p class="switch-tip" id="switchTip">Tap the 🌐 key to switch to the Say It keyboard</p>
+        <div class="row"><span class="k">q</span><span class="k">w</span><span class="k">e</span><span class="k">r</span><span class="k">t</span><span class="k">y</span><span class="k">u</span><span class="k">i</span><span class="k">o</span><span class="k">p</span></div>
+        <div class="row"><span class="k">a</span><span class="k">s</span><span class="k">d</span><span class="k">f</span><span class="k">g</span><span class="k">h</span><span class="k">j</span><span class="k">k</span><span class="k">l</span></div>
+        <div class="row"><span class="k wide">⇧</span><span class="k">z</span><span class="k">x</span><span class="k">c</span><span class="k">v</span><span class="k">b</span><span class="k">n</span><span class="k">m</span><span class="k wide">⌫</span></div>
+        <div class="row">
+          <span class="k wide">123</span>
+          <button class="k wide globe hint" id="toSayIt" aria-label="Switch to Say It keyboard">🌐</button>
+          <span class="k space">space</span>
+          <span class="k wide">return</span>
+        </div>
+      </div>
+
+      <!-- Say It keyboard -->
+      <div class="kb-inner sayit" id="sayitKb" hidden>
+        <div class="preview empty" id="preview">Tap the red button and say your reply.</div>
+        <div class="controls">
+          <div class="side">
+            <button class="kbtn" id="readBtn" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>
+              <span id="readLabel">Read back</span>
+            </button>
+            <button class="kbtn" id="clearBtn" disabled>Clear</button>
+          </div>
+          <button class="mic" id="micBtn" aria-label="Start speaking">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+            <span id="micLabel">Speak</span>
+          </button>
+          <div class="side">
+            <button class="kbtn insert" id="insertBtn" disabled>Insert</button>
+          </div>
+        </div>
+        <div class="bottom-row">
+          <button class="globe-btn" id="toNormal" aria-label="Switch back to the normal keyboard">🌐</button>
+          <span class="label">Say It keyboard</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="keyboard.js?v=1"></script>
+</body>
+</html>
