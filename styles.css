@@ -240,3 +240,21 @@ svg { width: 1.4em; height: 1.4em; fill: none; stroke: currentColor; stroke-widt
 .people-tip { flex: 1 0 180px; align-self: center; margin: 0; font-size: 0.9rem; line-height: 1.4; color: var(--muted); white-space: normal; }
 .message .w { cursor: pointer; }
 .sub { margin: 8px 0 0; font-size: 0.95rem; font-weight: 600; }
+
+/* Replying to a text */
+.reply { display: flex; flex-direction: column; gap: 10px; }
+.reply .label { margin: 0; }
+.paste-btn { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.theirs-manual { display: flex; flex-direction: column; gap: 8px; }
+.theirs-manual label { font-size: 0.95rem; }
+.theirs-manual textarea { width: 100%; border: 2px solid var(--accent); border-radius: 12px; background: var(--surface); padding: 10px 12px; }
+.theirs {
+  display: flex; flex-direction: column; gap: 12px;
+  background: var(--accent-soft); border-radius: var(--radius) var(--radius) var(--radius) 6px;
+  padding: 16px;
+}
+.theirs-text { margin: 0; font-size: calc(var(--msg-size) * 0.8); line-height: 1.55; word-spacing: 0.12em; overflow-wrap: anywhere; }
+.theirs-text .w { border-radius: 6px; padding: 0 2px; margin: 0 -2px; }
+.theirs-text .w.on { background: var(--highlight); }
+.theirs-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.theirs-actions .tool { background: var(--surface); }

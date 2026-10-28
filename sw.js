@@ -1,5 +1,5 @@
 // Keeps the app itself working offline. Speech and tidy-up calls always go to the network.
-const CACHE = "sayit-v7";
+const CACHE = "sayit-v8";
 const SHELL = ["./", "index.html", "styles.css", "app.js", "manifest.webmanifest", "icons/icon.svg", "icons/icon-192.png"];
 
 self.addEventListener("install", (e) => {

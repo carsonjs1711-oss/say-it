@@ -68,6 +68,7 @@ const state = {
   showingOriginal: false,
   typing: false,
   busy: false,
+  theirs: "", // the text they are replying to
 };
 
 // ---------- Elements ----------
@@ -86,6 +87,14 @@ const el = {
   originalBtn: $("originalBtn"),
   originalLabel: $("originalLabel"),
   clearBtn: $("clearBtn"),
+  copyBtn: $("copyBtn"),
+  pasteTheirs: $("pasteTheirs"),
+  theirsManual: $("theirsManual"),
+  theirsManualWrap: $("theirsManualWrap"),
+  theirs: $("theirs"),
+  theirsText: $("theirsText"),
+  readTheirs: $("readTheirs"),
+  readTheirsLabel: $("readTheirsLabel"),
   phrases: $("phrases"),
   micBtn: $("micBtn"),
   micLabel: $("micLabel"),
@@ -129,6 +138,29 @@ function currentText() {
   return state.showingOriginal ? state.original : state.text;
 }
 
+// Wrap each word so it can be highlighted while it is read out
+function renderWords(container, text, tappable) {
+  container.textContent = "";
+  const re = /\S+/g;
+  let last = 0;
+  let m;
+  while ((m = re.exec(text))) {
+    if (m.index > last) container.append(text.slice(last, m.index));
+    const span = document.createElement("span");
+    span.className = "w";
+    if (tappable) {
+      span.setAttribute("role", "button");
+      span.tabIndex = 0;
+    }
+    span.dataset.start = m.index;
+    span.dataset.end = m.index + m[0].length;
+    span.textContent = m[0];
+    container.append(span);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) container.append(text.slice(last));
+}
+
 function renderMessage() {
   const text = currentText();
   el.message.textContent = "";
@@ -137,23 +169,7 @@ function renderMessage() {
     el.message.textContent = "Tap the red button and say your message.";
   } else {
     el.message.classList.remove("empty");
-    // Wrap each word so it can be highlighted while it is read out
-    const re = /\S+/g;
-    let last = 0;
-    let m;
-    while ((m = re.exec(text))) {
-      if (m.index > last) el.message.append(text.slice(last, m.index));
-      const span = document.createElement("span");
-      span.className = "w";
-      span.setAttribute("role", "button");
-      span.tabIndex = 0;
-      span.dataset.start = m.index;
-      span.dataset.end = m.index + m[0].length;
-      span.textContent = m[0];
-      el.message.append(span);
-      last = m.index + m[0].length;
-    }
-    if (last < text.length) el.message.append(text.slice(last));
+    renderWords(el.message, text, true);
   }
 
   el.message.hidden = state.typing;
@@ -266,14 +282,14 @@ function stopSpeaking() {
   utterance = null;
   clearHighlight();
   el.readLabel.textContent = "Read to me";
+  el.readTheirsLabel.textContent = "Read it to me";
 }
 
 function clearHighlight() {
-  el.message.querySelectorAll(".w.on").forEach((w) => w.classList.remove("on"));
+  document.querySelectorAll(".w.on").forEach((w) => w.classList.remove("on"));
 }
 
-function readAloud() {
-  const text = currentText();
+function readAloud(container = el.message, text = currentText(), label = el.readLabel) {
   if (!text) return;
   if (!("speechSynthesis" in window)) {
     setStatus("This phone can't read out loud in the browser.", "error");
@@ -281,9 +297,10 @@ function readAloud() {
   }
   if (state.typing) toggleTyping();
   stopSpeaking();
-  const words = [...el.message.querySelectorAll(".w")];
+  const words = [...container.querySelectorAll(".w")];
+  const idle = label.textContent;
   utterance = speak(text);
-  el.readLabel.textContent = "Stop reading";
+  label.textContent = "Stop reading";
   utterance.onboundary = (e) => {
     if (e.name && e.name !== "word") return;
     clearHighlight();
@@ -292,7 +309,7 @@ function readAloud() {
   };
   utterance.onend = utterance.onerror = () => {
     clearHighlight();
-    el.readLabel.textContent = "Read to me";
+    label.textContent = idle;
     utterance = null;
   };
 }
@@ -635,11 +652,14 @@ async function tidy(raw) {
   if (!settings.anthropicKey) return basicTidy(raw);
   const person = people[state.to];
   const who = person ? `\nThe message is to: ${person.name}` : "";
+  const theirs = state.theirs
+    ? `\n<replying_to>\n${state.theirs}\n</replying_to>\nThis is the text they are replying to. Use it only to understand their words (names, places, what "it" or "that" means). Do not answer it yourself.`
+    : "";
   // With the AI, fixes are hints rather than forced swaps, so it can still
   // write "sticker" when the sentence really means a sticker.
   return askClaude(
     TIDY_SYSTEM[settings.tidy] || TIDY_SYSTEM.normal,
-    `<dictation>\n${raw}\n</dictation>${who}${knownWords()}${fixHints()}`
+    `<dictation>\n${raw}\n</dictation>${who}${theirs}${knownWords()}${fixHints()}`
   );
 }
 
@@ -763,6 +783,51 @@ function send() {
   );
 }
 
+async function copyReply() {
+  if (state.typing) toggleTyping();
+  const text = currentText();
+  if (!text) return;
+  stopSpeaking();
+  try {
+    await navigator.clipboard.writeText(text);
+    setStatus("Copied. Go back to their text in Messages, tap the text box, and choose Paste.");
+  } catch {
+    toggleTyping();
+    el.messageEdit.select();
+    setStatus("Couldn't copy by itself. Your message is selected, so tap Copy on the menu.", "error");
+  }
+}
+
+// ---------- Replying to a text ----------
+function setTheirs(text) {
+  state.theirs = text.trim();
+  renderTheirs();
+  if (state.theirs) {
+    setStatus("Now tap the red button and say your reply.");
+    readAloud(el.theirsText, state.theirs, el.readTheirsLabel);
+  }
+}
+
+function renderTheirs() {
+  el.theirs.hidden = !state.theirs;
+  el.pasteTheirs.hidden = !!state.theirs;
+  el.theirsManualWrap.hidden = true;
+  if (state.theirs) renderWords(el.theirsText, state.theirs, false);
+}
+
+async function pasteTheirs() {
+  try {
+    const text = await navigator.clipboard.readText();
+    if (text.trim()) return setTheirs(text);
+  } catch {
+    /* not allowed here: let them paste by hand */
+  }
+  el.pasteTheirs.hidden = true;
+  el.theirsManualWrap.hidden = false;
+  el.theirsManual.value = "";
+  el.theirsManual.focus();
+}
+
 // ---------- People ----------
 function openPersonDialog() {
   el.personForm.reset();
@@ -873,11 +938,24 @@ el.originalBtn.addEventListener("click", () => {
 });
 el.clearBtn.addEventListener("click", () => {
   stopSpeaking();
-  Object.assign(state, { text: "", original: "", showingOriginal: false, typing: false });
+  Object.assign(state, { text: "", original: "", showingOriginal: false, typing: false, theirs: "" });
   setStatus("");
+  renderTheirs();
   renderMessage();
 });
 el.messageEdit.addEventListener("input", renderSend);
+el.copyBtn.addEventListener("click", copyReply);
+el.pasteTheirs.addEventListener("click", pasteTheirs);
+$("useTheirs").addEventListener("click", () => setTheirs(el.theirsManual.value));
+$("cancelTheirs").addEventListener("click", renderTheirs);
+el.readTheirs.addEventListener("click", () =>
+  utterance ? stopSpeaking() : readAloud(el.theirsText, state.theirs, el.readTheirsLabel)
+);
+$("removeTheirs").addEventListener("click", () => {
+  stopSpeaking();
+  setTheirs("");
+  setStatus("");
+});
 el.sendBtn.addEventListener("click", send);
 
 el.message.addEventListener("click", (e) => {
@@ -915,7 +993,15 @@ el.personForm.addEventListener("submit", (e) => {
   el.personDialog.close();
 });
 
+const shared = new URLSearchParams(location.search);
+const sharedText = [shared.get("text"), shared.get("title")].filter(Boolean).join(" ");
+if (sharedText) {
+  history.replaceState(null, "", location.pathname);
+  state.theirs = sharedText.trim();
+}
+
 applyLook();
+renderTheirs();
 renderPeople();
 renderPhrases();
 renderMessage();
@@ -923,6 +1009,7 @@ renderMessage();
 if (!settings.openaiKey && !settings.anthropicKey) {
   setStatus("Tip: add your service keys in Settings for the best results.");
 }
+if (sharedText) setStatus("Here's their message. Tap Read it to me, then the red button to reply.");
 
 if ("serviceWorker" in navigator && location.protocol === "https:") {
   navigator.serviceWorker.register("sw.js").catch(() => {});

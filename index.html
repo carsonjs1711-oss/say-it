@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
-  <link rel="stylesheet" href="styles.css?v=7">
+  <link rel="stylesheet" href="styles.css?v=8">
 </head>
 <body>
   <div class="app">
@@ -30,6 +30,35 @@
     <section class="to" aria-labelledby="toLabel">
       <h2 id="toLabel" class="label">Send to</h2>
       <div class="people" id="people" role="list"></div>
+    </section>
+
+    <section class="reply" aria-labelledby="replyLabel">
+      <h2 id="replyLabel" class="label">Replying to a text?</h2>
+      <button class="wide-btn paste-btn" id="pasteTheirs">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6v3H9z"/><path d="M15 5h3v16H6V5h3"/><path d="M9 12h6M9 16h4"/></svg>
+        <span>Paste their message</span>
+      </button>
+      <div class="theirs-manual" id="theirsManualWrap" hidden>
+        <label for="theirsManual">Press and hold in the box, then tap Paste</label>
+        <textarea id="theirsManual" rows="3"></textarea>
+        <div class="sheet-actions">
+          <button type="button" class="ghost" id="cancelTheirs">Cancel</button>
+          <button type="button" class="primary" id="useTheirs">Use this</button>
+        </div>
+      </div>
+      <div class="theirs" id="theirs" hidden>
+        <p class="theirs-text" id="theirsText"></p>
+        <div class="theirs-actions">
+          <button class="tool" id="readTheirs">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+            <span id="readTheirsLabel">Read it to me</span>
+          </button>
+          <button class="tool" id="removeTheirs">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+            <span>Remove</span>
+          </button>
+        </div>
+      </div>
     </section>
 
     <section class="message-wrap" aria-label="Your message">
@@ -53,6 +82,10 @@
         <button class="tool" id="originalBtn">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-2"/></svg>
           <span id="originalLabel">What I said</span>
+        </button>
+        <button class="tool" id="copyBtn">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg>
+          <span>Copy</span>
         </button>
         <button class="tool" id="clearBtn">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
@@ -182,12 +215,12 @@
       </fieldset>
 
       <div class="sheet-actions">
-        <span class="hint version">Version 7</span>
+        <span class="hint version">Version 8</span>
         <button type="submit" class="primary" id="closeSettings">Done</button>
       </div>
     </form>
   </dialog>
 
-  <script src="app.js?v=7"></script>
+  <script src="app.js?v=8"></script>
 </body>
 </html>
