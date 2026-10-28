@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
-  <link rel="stylesheet" href="styles.css?v=8">
+  <link rel="stylesheet" href="styles.css?v=9">
 </head>
 <body>
   <div class="app">
@@ -61,8 +61,28 @@
       </div>
     </section>
 
+    <section class="modes" id="modes" aria-labelledby="modesLabel" hidden>
+      <h2 id="modesLabel" class="label">Style</h2>
+      <div class="mode-row" role="radiogroup" aria-labelledby="modesLabel">
+        <button class="mode" role="radio" data-mode="mate">
+          <strong>Mate</strong><span>Casual text</span>
+        </button>
+        <button class="mode" role="radio" data-mode="client">
+          <strong>Client</strong><span>Polite, proper</span>
+        </button>
+        <button class="mode" role="radio" data-mode="email">
+          <strong>Email</strong><span>Hi… Thanks…</span>
+        </button>
+      </div>
+    </section>
+
     <section class="message-wrap" aria-label="Your message">
+      <p class="subject" id="subject" hidden></p>
       <div class="message" id="message" aria-live="polite"></div>
+      <div class="check-bar" id="checkBar" hidden>
+        <span id="checkText"></span>
+        <button id="changesToggle" aria-pressed="false">Show what changed</button>
+      </div>
       <textarea class="message-edit" id="messageEdit" rows="5" aria-label="Type to change your message" hidden></textarea>
       <p class="status" id="status" role="status" aria-live="polite"></p>
 
@@ -78,10 +98,6 @@
         <button class="tool" id="typeBtn">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg>
           <span id="typeLabel">Type</span>
-        </button>
-        <button class="tool" id="originalBtn">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-2"/></svg>
-          <span id="originalLabel">What I said</span>
         </button>
         <button class="tool" id="copyBtn">
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg>
@@ -131,16 +147,27 @@
 
   <!-- Fix one word -->
   <dialog id="fixDialog" class="sheet" aria-labelledby="fixTitle">
-    <form method="dialog" id="fixForm">
+    <div class="fix-sheet">
       <h2 id="fixTitle">Change word</h2>
-      <label for="fixInput">Change it to</label>
-      <input id="fixInput" autocomplete="off" autocapitalize="off" spellcheck="true" required>
+      <p class="hint" id="fixHint"></p>
+      <div class="choices" id="fixChoices"></div>
+      <button type="button" class="wide-btn" id="fixRevert" hidden></button>
+      <div class="fix-row" id="fixActions">
+        <button type="button" class="wide-btn" id="fixSay">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+          <span id="fixSayLabel">Say the word</span>
+        </button>
+        <button type="button" class="wide-btn" id="fixTypeBtn">Type it</button>
+      </div>
+      <form class="fix-row" id="fixForm" hidden>
+        <input id="fixInput" aria-label="Type the right word" autocomplete="off" autocapitalize="off" spellcheck="true" required>
+        <button type="submit" class="primary">Change</button>
+      </form>
       <label class="check"><input type="checkbox" id="fixAlways"> Always fix this word</label>
       <div class="sheet-actions">
         <button type="button" class="ghost" id="cancelFix">Cancel</button>
-        <button type="submit" class="primary">Change</button>
       </div>
-    </form>
+    </div>
   </dialog>
 
   <!-- Settings -->
@@ -185,7 +212,9 @@
 
       <fieldset>
         <legend>Tidying up</legend>
-        <label for="setTidy">How much should it fix?</label>
+        <label for="setMyName">Your name (for signing emails)</label>
+        <input id="setMyName" autocomplete="name">
+        <label for="setTidy">How much should it fix in Mate style?</label>
         <select id="setTidy">
           <option value="light">Just spelling and full stops</option>
           <option value="normal">Fix mistakes, keep my way of talking</option>
@@ -215,12 +244,13 @@
       </fieldset>
 
       <div class="sheet-actions">
-        <span class="hint version">Version 8</span>
+        <span class="hint version">Version 9</span>
         <button type="submit" class="primary" id="closeSettings">Done</button>
       </div>
     </form>
   </dialog>
 
-  <script src="app.js?v=8"></script>
+  <script src="compare.js?v=1"></script>
+  <script src="app.js?v=9"></script>
 </body>
 </html>

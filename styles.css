@@ -14,6 +14,7 @@
   --send-ink: #ffffff;
   --highlight: #ffdf80;
   --danger: #a1321f;
+  --fix: #d08a10;
 
   --font: "Lexend", system-ui, -apple-system, "Segoe UI", sans-serif;
   --msg-size: 1.6rem;
@@ -32,14 +33,14 @@
   :root:not([data-theme="light"]) {
     --bg: #141a22; --surface: #1d2530; --ink: #eef2f7; --muted: #a5afbd; --line: #2e3947;
     --accent: #8db4ec; --accent-soft: #24324a; --mic: #e2614a; --send: #2a9a69;
-    --highlight: #7a6417; --danger: #ef8a76;
+    --highlight: #7a6417; --danger: #ef8a76; --fix: #e0a640;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #141a22; --surface: #1d2530; --ink: #eef2f7; --muted: #a5afbd; --line: #2e3947;
   --accent: #8db4ec; --accent-soft: #24324a; --mic: #e2614a; --send: #2a9a69;
-  --highlight: #7a6417; --danger: #ef8a76;
+  --highlight: #7a6417; --danger: #ef8a76; --fix: #e0a640;
   color-scheme: dark;
 }
 
@@ -258,3 +259,48 @@ svg { width: 1.4em; height: 1.4em; fill: none; stroke: currentColor; stroke-widt
 .theirs-text .w.on { background: var(--highlight); }
 .theirs-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .theirs-actions .tool { background: var(--surface); }
+
+/* Style picker */
+.modes { display: flex; flex-direction: column; gap: 8px; }
+.modes .label { margin: 0; }
+.mode-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.mode {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  border: 2px solid var(--line); background: var(--surface); border-radius: 14px;
+  padding: 10px 6px; line-height: 1.2; text-align: center;
+}
+.mode strong { font-size: 1rem; font-weight: 600; }
+.mode span { font-size: 0.75rem; color: var(--muted); }
+.mode[aria-checked="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.mode[aria-checked="true"] strong { color: var(--accent); }
+
+/* Checking the message */
+.subject { margin: 0; font-size: 0.95rem; font-weight: 600; color: var(--muted); }
+.message { white-space: pre-wrap; }
+.message .w.changed { text-decoration: underline 3px var(--fix); text-underline-offset: 5px; }
+.message .w.unsure {
+  outline: 2px dashed var(--fix); outline-offset: 2px; border-radius: 6px;
+}
+.message .w.unsure::after {
+  content: "?"; display: inline-block; margin-left: 3px; padding: 0 6px;
+  font-size: 0.6em; font-weight: 700; vertical-align: super; line-height: 1.5;
+  border-radius: 999px; background: var(--fix); color: var(--surface);
+}
+.message .was { color: var(--muted); text-decoration: line-through 2px; font-size: 0.8em; }
+.check-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; font-size: 0.9rem; }
+.check-bar span::before { content: ""; display: inline-block; width: 16px; height: 3px; background: var(--fix); vertical-align: middle; margin-right: 8px; }
+.check-bar button { border: none; background: none; color: var(--accent); font-weight: 600; padding: 4px 0; font-size: 0.9rem; }
+
+/* Fixing one word */
+.fix-sheet { padding: 22px; display: flex; flex-direction: column; gap: 12px; }
+.fix-sheet h2 { margin: 0; font-size: 1.35rem; font-weight: 600; overflow-wrap: anywhere; }
+.choices { display: flex; flex-direction: column; gap: 8px; }
+.choices:empty { display: none; }
+.choice { display: flex; gap: 8px; }
+.choice .hear { flex: none; width: 52px; border: 1px solid var(--line); background: var(--accent-soft); border-radius: 12px; display: grid; place-items: center; }
+.choice .pick { flex: 1; min-width: 0; border: 2px solid var(--accent); background: var(--surface); border-radius: 12px; padding: 12px; font-size: 1.15rem; font-weight: 600; text-align: left; overflow-wrap: anywhere; }
+.fix-row { display: flex; gap: 8px; }
+.fix-row > * { flex: 1; min-width: 0; }
+.fix-row .wide-btn { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.fix-row input { border: 2px solid var(--accent); border-radius: 12px; background: var(--bg); padding: 12px; font-size: 1rem; }
+.wide-btn.listening { background: var(--mic); color: var(--mic-ink); border-color: var(--mic); }
