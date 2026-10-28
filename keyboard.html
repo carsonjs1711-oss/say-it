@@ -26,6 +26,7 @@
       --mic: #c8432a;
       --accent: #2c5a99;
       --banner: #fff4d6;
+      --fix: #e0a020;
       --highlight: #ffdf80;
       --font: "Lexend", system-ui, -apple-system, sans-serif;
       --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -35,14 +36,14 @@
       :root:not([data-theme="light"]) {
         --bg: #000000; --ink: #f2f3f5; --muted: #9aa0a8; --line: #26282c; --them: #26262a;
         --me: #2a84f5; --kb: #2b2b2e; --key: #5a5a5e; --key-dark: #3c3c40; --mic: #e2614a;
-        --accent: #8db4ec; --banner: #3a3214; --highlight: #7a6417;
+        --accent: #8db4ec; --banner: #3a3214; --highlight: #7a6417; --fix: #d9a640;
         color-scheme: dark;
       }
     }
     :root[data-theme="dark"] {
       --bg: #000000; --ink: #f2f3f5; --muted: #9aa0a8; --line: #26282c; --them: #26262a;
       --me: #2a84f5; --kb: #2b2b2e; --key: #5a5a5e; --key-dark: #3c3c40; --mic: #e2614a;
-      --accent: #8db4ec; --banner: #3a3214; --highlight: #7a6417;
+      --accent: #8db4ec; --banner: #3a3214; --highlight: #7a6417; --fix: #d9a640;
       color-scheme: dark;
     }
     * { box-sizing: border-box; }
@@ -89,7 +90,7 @@
 
     .kb { background: var(--kb); padding-bottom: env(safe-area-inset-bottom, 0px); }
     .kb-inner {
-      height: 300px; display: flex; flex-direction: column; gap: 8px; padding-top: 8px; padding-bottom: 8px;
+      height: 320px; display: flex; flex-direction: column; gap: 8px; padding-top: 8px; padding-bottom: 8px;
       padding-left: max(6px, env(safe-area-inset-left, 0px)); padding-right: max(6px, env(safe-area-inset-right, 0px));
     }
 
@@ -109,8 +110,30 @@
       padding: 10px 12px; font-size: 1.15rem; line-height: 1.5; word-spacing: 0.1em;
     }
     .preview.empty, .preview.busy { color: var(--muted); font-size: 0.95rem; }
-    .preview .w { border-radius: 5px; padding: 0 2px; margin: 0 -2px; }
+    .preview .w { border-radius: 5px; padding: 0 2px; margin: 0 -2px; cursor: pointer; }
     .preview .w.on { background: var(--highlight); }
+    /* A word the tidy-up changed or added */
+    .preview .w.changed { text-decoration: underline 3px var(--fix); text-underline-offset: 4px; }
+    .preview .was { color: var(--muted); text-decoration: line-through 2px; font-size: 0.85em; margin-right: 4px; }
+    .preview .was.gone { margin-right: 6px; }
+    .try-btn { margin-top: 10px; border: 2px dashed var(--accent); background: none; color: var(--accent); border-radius: 10px; padding: 8px 14px; font-weight: 600; font-size: 0.95rem; }
+
+    .preview-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 4px; }
+    .changes-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.8rem; padding: 0 4px; }
+    .changes-bar span { color: var(--ink); }
+    .changes-bar span::before { content: ""; display: inline-block; width: 14px; height: 3px; background: var(--fix); vertical-align: middle; margin-right: 6px; }
+    .changes-bar button { border: none; background: none; color: var(--accent); font-weight: 600; padding: 4px 0; font-size: 0.8rem; }
+
+    .fix-panel { flex: 1; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+    .fix-title { margin: 0; font-size: 1rem; text-align: center; }
+    .fix-title strong { font-size: 1.15rem; }
+    .fix-row { display: flex; gap: 8px; }
+    .fix-row > * { flex: 1; min-width: 0; }
+    .fix-row input { border: 2px solid var(--accent); border-radius: 10px; padding: 8px 10px; font: inherit; background: var(--key); color: var(--ink); }
+    .fix-panel .kbtn { min-height: 42px; font-size: 0.95rem; }
+    .fix-always { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.9rem; }
+    .fix-always input { width: 22px; height: 22px; }
+    .kbtn.listening { background: var(--mic); color: #fff; }
     .controls { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; }
     .side { display: flex; flex-direction: column; gap: 6px; }
     .kbtn { border: none; border-radius: 10px; background: var(--key); padding: 9px 6px; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 1px 0 rgb(0 0 0 / 0.3); }
@@ -174,8 +197,34 @@
 
       <!-- Say It keyboard -->
       <div class="kb-inner sayit" id="sayitKb" hidden>
-        <div class="preview empty" id="preview">Tap the red button and say your reply.</div>
-        <div class="controls">
+        <div class="preview-wrap" id="previewWrap">
+          <div class="preview empty" id="preview" aria-live="polite"></div>
+          <div class="changes-bar" id="changesBar" hidden>
+            <span id="changesCount"></span>
+            <button id="changesToggle" aria-pressed="false">Show what changed</button>
+          </div>
+        </div>
+
+        <!-- Fixing one word -->
+        <div class="fix-panel" id="fixPanel" hidden>
+          <p class="fix-title" id="fixTitle"></p>
+          <button class="kbtn" id="fixRevert" hidden></button>
+          <div class="fix-row" id="fixActions">
+            <button class="kbtn" id="fixSay">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+              <span id="fixSayLabel">Say the word</span>
+            </button>
+            <button class="kbtn" id="fixTypeBtn">Type it</button>
+          </div>
+          <div class="fix-row" id="fixTypeRow" hidden>
+            <input id="fixInput" aria-label="Type the right word" autocomplete="off" autocapitalize="off">
+            <button class="kbtn insert" id="fixSave">Change</button>
+          </div>
+          <label class="fix-always"><input type="checkbox" id="fixAlways"> Always fix this word</label>
+          <button class="kbtn" id="fixCancel">Cancel</button>
+        </div>
+
+        <div class="controls" id="controls">
           <div class="side">
             <button class="kbtn" id="readBtn" disabled>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>
@@ -191,7 +240,7 @@
             <button class="kbtn insert" id="insertBtn" disabled>Insert</button>
           </div>
         </div>
-        <div class="bottom-row">
+        <div class="bottom-row" id="bottomRow">
           <button class="globe-btn" id="toNormal" aria-label="Switch back to the normal keyboard">🌐</button>
           <span class="label">Say It keyboard</span>
         </div>
@@ -199,6 +248,6 @@
     </div>
   </div>
 
-  <script src="keyboard.js?v=1"></script>
+  <script src="keyboard.js?v=2"></script>
 </body>
 </html>

@@ -12,6 +12,14 @@ function load(key, fallback) {
   }
 }
 
+function save(key, value) {
+  try {
+    localStorage.setItem("sayit." + key, JSON.stringify(value));
+  } catch {
+    /* private mode: fixes last until the page closes */
+  }
+}
+
 const settings = { openaiKey: "", anthropicKey: "", autoRead: true, rate: "1", words: "", ...load("settings", {}) };
 const fixes = load("fixes", null) || {
   silicon: "silicone",
@@ -22,6 +30,12 @@ const fixes = load("fixes", null) || {
   pc: "PC",
 };
 
+// A rough transcript like ordinary dictation gives, and what the AI tidy-up makes of it
+const EXAMPLE = {
+  heard: "yeah no worries um ill grab the sicker from bunnings on the way be there at six no wait half six",
+  tidied: "Yeah, no worries. I'll grab the sikka from Bunnings on the way. Be there at half six.",
+};
+
 const $ = (id) => document.getElementById(id);
 const el = {
   thread: $("thread"),
@@ -29,16 +43,41 @@ const el = {
   sendArrow: $("sendArrow"),
   normalKb: $("normalKb"),
   sayitKb: $("sayitKb"),
+  previewWrap: $("previewWrap"),
   preview: $("preview"),
+  changesBar: $("changesBar"),
+  changesCount: $("changesCount"),
+  changesToggle: $("changesToggle"),
+  controls: $("controls"),
+  bottomRow: $("bottomRow"),
   readBtn: $("readBtn"),
   readLabel: $("readLabel"),
   clearBtn: $("clearBtn"),
   insertBtn: $("insertBtn"),
   micBtn: $("micBtn"),
   micLabel: $("micLabel"),
+  fixPanel: $("fixPanel"),
+  fixTitle: $("fixTitle"),
+  fixRevert: $("fixRevert"),
+  fixActions: $("fixActions"),
+  fixSay: $("fixSay"),
+  fixSayLabel: $("fixSayLabel"),
+  fixTypeBtn: $("fixTypeBtn"),
+  fixTypeRow: $("fixTypeRow"),
+  fixInput: $("fixInput"),
+  fixSave: $("fixSave"),
+  fixAlways: $("fixAlways"),
+  fixCancel: $("fixCancel"),
 };
 
-let draft = ""; // what the keyboard has written, not yet inserted
+const state = {
+  heard: "", // exactly what the speech recognition gave
+  draft: "", // the tidied message, not yet inserted
+  example: false,
+  showChanges: false,
+  busy: false,
+  fixing: null, // { index, core, was } while fixing one word
+};
 let fieldText = ""; // what is in the reply box
 
 // ---------- Keyboards ----------
@@ -54,37 +93,177 @@ $("toNormal").addEventListener("click", () => {
   $("switchTip").textContent = "This keyboard is just for show. Tap 🌐 to go back to Say It.";
 });
 
-// ---------- Preview ----------
-function showPreview(text, kind = "") {
-  el.preview.className = "preview" + (kind ? " " + kind : "");
-  el.preview.textContent = "";
-  if (kind) {
-    el.preview.textContent = text;
-  } else {
-    const re = /\S+/g;
-    let last = 0;
-    let m;
-    while ((m = re.exec(text))) {
-      if (m.index > last) el.preview.append(text.slice(last, m.index));
-      const span = document.createElement("span");
-      span.className = "w";
-      span.dataset.start = m.index;
-      span.dataset.end = m.index + m[0].length;
-      span.textContent = m[0];
-      el.preview.append(span);
-      last = m.index + m[0].length;
+// ---------- Working out what changed ----------
+function tokens(text) {
+  return [...text.matchAll(/\S+/g)].map((m) => ({ text: m[0], start: m.index, end: m.index + m[0].length }));
+}
+
+// Compare words ignoring capitals and punctuation, so "yeah" and "Yeah," count as the same
+function wordKey(word) {
+  return word.toLowerCase().replace(/’/g, "'").replace(/[^\p{L}\p{N}']/gu, "");
+}
+
+// Line up what was heard with the tidied message, word by word. Returns, for each
+// tidied word, whether it changed and what was said instead, plus words that were
+// dropped (shown before the tidied word they sat in front of).
+function compare(heard, tidied) {
+  const a = tokens(heard).map((t) => wordKey(t.text));
+  const b = tokens(tidied).map((t) => wordKey(t.text));
+  const lcs = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
+  for (let i = a.length - 1; i >= 0; i--) {
+    for (let j = b.length - 1; j >= 0; j--) {
+      lcs[i][j] = a[i] === b[j] ? lcs[i + 1][j + 1] + 1 : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
     }
   }
-  const has = !kind && !!draft;
+
+  const heardWords = tokens(heard).map((t) => t.text);
+  const words = b.map(() => ({ changed: false, was: "" }));
+  const dropped = {};
+  let changes = 0;
+  let gone = [];
+  let added = [];
+  const flush = (nextIndex) => {
+    if (added.length) {
+      // Pair the new words with the last words said; anything said before those was dropped
+      const extra = gone.length - added.length;
+      if (extra > 0) {
+        dropped[added[0]] = gone.slice(0, extra).join(" ");
+        changes++;
+      }
+      added.forEach((j) => (words[j].changed = true));
+      words[added[0]].was = gone.slice(Math.max(extra, 0)).join(" ");
+      changes++;
+    } else if (gone.length) {
+      dropped[nextIndex] = gone.join(" ");
+      changes++;
+    }
+    gone = [];
+    added = [];
+  };
+
+  let i = 0;
+  let j = 0;
+  while (i < a.length || j < b.length) {
+    if (i < a.length && j < b.length && a[i] === b[j]) {
+      flush(j);
+      i++;
+      j++;
+    } else if (j >= b.length || (i < a.length && lcs[i + 1][j] >= lcs[i][j + 1])) {
+      gone.push(heardWords[i]);
+      i++;
+    } else {
+      if (b[j]) added.push(j);
+      j++;
+    }
+  }
+  flush(b.length);
+  return { words, dropped, changes };
+}
+
+// ---------- Preview ----------
+function showMessage(text, kind = "busy") {
+  el.preview.className = "preview " + kind;
+  el.preview.textContent = text;
+  el.changesBar.hidden = true;
+  updateButtons();
+}
+
+function render() {
+  if (!state.draft) {
+    el.preview.className = "preview empty";
+    el.preview.textContent = "Tap the red button and say your reply.";
+    const tryBtn = document.createElement("button");
+    tryBtn.className = "try-btn";
+    tryBtn.textContent = "No mic? Try an example";
+    tryBtn.addEventListener("click", tryExample);
+    el.preview.append(document.createElement("br"), tryBtn);
+    el.changesBar.hidden = true;
+    updateButtons();
+    return;
+  }
+
+  const { words, dropped, changes } = compare(state.heard, state.draft);
+  el.preview.className = "preview";
+  el.preview.textContent = "";
+  const crossedOut = (text, extra = "") => {
+    const s = document.createElement("s");
+    s.className = "was" + extra;
+    s.textContent = text;
+    s.setAttribute("aria-label", "you said " + text);
+    return s;
+  };
+  const toks = tokens(state.draft);
+  let last = 0;
+  toks.forEach((t, j) => {
+    if (t.start > last) el.preview.append(state.draft.slice(last, t.start));
+    if (state.showChanges && dropped[j]) el.preview.append(crossedOut(dropped[j], " gone"));
+    if (state.showChanges && words[j].was) el.preview.append(crossedOut(words[j].was));
+    const span = document.createElement("span");
+    span.className = "w" + (words[j].changed ? " changed" : "");
+    span.setAttribute("role", "button");
+    span.tabIndex = 0;
+    span.dataset.index = j;
+    span.dataset.start = t.start;
+    span.dataset.end = t.end;
+    span.textContent = t.text;
+    el.preview.append(span);
+    last = t.end;
+  });
+  if (state.showChanges && dropped[toks.length]) el.preview.append(" ", crossedOut(dropped[toks.length], " gone"));
+
+  el.changesBar.hidden = changes === 0;
+  el.changesCount.textContent =
+    (state.example ? "Example: " : "") + `${changes} ${changes === 1 ? "fix" : "fixes"}. Tap any word to change it.`;
+  el.changesToggle.textContent = state.showChanges ? "Hide" : "Show what changed";
+  el.changesToggle.setAttribute("aria-pressed", String(state.showChanges));
+  updateButtons();
+}
+
+function updateButtons() {
+  const has = !!state.draft && !state.busy && !isListening();
   el.readBtn.disabled = !has;
   el.clearBtn.disabled = !has;
   el.insertBtn.disabled = !has;
-  el.micLabel.textContent = isListening() ? "Stop" : has ? "Add more" : "Speak";
+  el.micBtn.disabled = state.busy;
+  el.micLabel.textContent = isListening() ? "Stop" : state.draft ? "Add more" : "Speak";
 }
 
-function resetPreview() {
-  draft = "";
-  showPreview("Tap the red button and say your reply.", "empty");
+function clearDraft() {
+  stopSpeaking();
+  Object.assign(state, { heard: "", draft: "", example: false, showChanges: false });
+  render();
+}
+
+el.changesToggle.addEventListener("click", () => {
+  stopSpeaking();
+  state.showChanges = !state.showChanges;
+  render();
+});
+
+// ---------- Try an example ----------
+async function tryExample() {
+  clearDraft();
+  state.busy = true;
+  const words = EXAMPLE.heard.split(" ");
+  for (let n = 1; n <= words.length; n++) {
+    showMessage("Ordinary dictation hears: " + words.slice(0, n).join(" "));
+    await new Promise((r) => setTimeout(r, 70));
+  }
+  await new Promise((r) => setTimeout(r, 700));
+  showMessage("Tidying up…");
+  let tidied = EXAMPLE.tidied;
+  if (settings.anthropicKey) {
+    try {
+      tidied = await tidy(EXAMPLE.heard);
+    } catch {
+      /* fall back to the saved example */
+    }
+  } else {
+    await new Promise((r) => setTimeout(r, 600));
+  }
+  Object.assign(state, { heard: EXAMPLE.heard, draft: tidied, example: true, showChanges: true, busy: false });
+  render();
+  if (settings.autoRead) readBack();
 }
 
 // ---------- Reading back ----------
@@ -98,10 +277,10 @@ function stopSpeaking() {
 }
 
 function readBack() {
-  if (!draft || !("speechSynthesis" in window)) return;
+  if (!state.draft || !("speechSynthesis" in window)) return;
   stopSpeaking();
   const words = [...el.preview.querySelectorAll(".w")];
-  utterance = new SpeechSynthesisUtterance(draft);
+  utterance = new SpeechSynthesisUtterance(state.draft);
   utterance.rate = Number(settings.rate) || 1;
   utterance.onboundary = (e) => {
     if (e.name && e.name !== "word") return;
@@ -117,25 +296,40 @@ function readBack() {
 // ---------- Listening ----------
 let recorder = null;
 let recognition = null;
+let listenMode = "message"; // or "word" when saying one word again
 
 function isListening() {
   return !!(recorder || recognition);
 }
 
-function setListening(on) {
-  el.micBtn.classList.toggle("listening", on);
-  el.micLabel.textContent = on ? "Stop" : draft ? "Add more" : "Speak";
-  if (on) showPreview("Listening… tap Stop when you've finished.", "busy");
+// Messages go in the preview while writing a message, or the fix panel title while fixing a word
+function say(text) {
+  if (listenMode === "word") el.fixTitle.textContent = text;
+  else showMessage(text);
 }
 
-async function startListening() {
+function setListening(on) {
+  el.micBtn.classList.toggle("listening", on && listenMode === "message");
+  el.fixSay.classList.toggle("listening", on && listenMode === "word");
+  el.fixSayLabel.textContent = on && listenMode === "word" ? "Stop" : "Say the word";
+  if (on) say(listenMode === "word" ? "Say the word, then tap Stop." : "Listening… tap Stop when you've finished.");
+  updateButtons();
+}
+
+function stopListening() {
+  if (recorder) recorder.stop();
+  else if (recognition) recognition.stop();
+}
+
+async function startListening(mode) {
   stopSpeaking();
+  listenMode = mode;
   if (settings.openaiKey && window.MediaRecorder && navigator.mediaDevices?.getUserMedia) {
     let stream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch {
-      return showPreview("Allow the microphone in your phone's settings, then try again.", "busy");
+      return say("Allow the microphone in your phone's settings, then try again.");
     }
     const mimeType = ["audio/webm;codecs=opus", "audio/mp4", "audio/webm"].find((t) => MediaRecorder.isTypeSupported?.(t));
     const chunks = [];
@@ -146,11 +340,11 @@ async function startListening() {
       const type = recorder.mimeType || "audio/webm";
       recorder = null;
       setListening(false);
-      showPreview("Writing it out…", "busy");
+      say("Writing it out…");
       try {
-        handleHeard(await transcribe(new Blob(chunks, { type })));
+        onHeard(await transcribe(new Blob(chunks, { type })));
       } catch (err) {
-        showPreview(err.message, "busy");
+        say(err.message);
       }
     };
     recorder.start();
@@ -159,7 +353,7 @@ async function startListening() {
   }
 
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) return showPreview("This browser can't turn speech into words. Add a speech key in the Say It app.", "busy");
+  if (!SR) return say("This browser can't turn speech into words. Add a speech key in the Say It app.");
   recognition = new SR();
   recognition.lang = navigator.language || "en-GB";
   recognition.continuous = true;
@@ -167,12 +361,12 @@ async function startListening() {
   let heard = "";
   recognition.onresult = (e) => {
     heard = joinResults(e.results);
-    showPreview("Hearing: " + heard, "busy");
+    say("Hearing: " + heard);
   };
   recognition.onend = () => {
     recognition = null;
     setListening(false);
-    handleHeard(heard);
+    onHeard(heard);
   };
   recognition.start();
   setListening(true);
@@ -190,26 +384,128 @@ function joinResults(results) {
   return text.trim();
 }
 
-async function handleHeard(heard) {
-  if (!heard) {
-    showPreview("I didn't catch that. Tap the red button and try again.", "busy");
+function onHeard(heard) {
+  if (listenMode === "word") {
+    const word = applyFixes(heard).replace(/[.!?,]+$/, "").trim();
+    if (!word) return say("I didn't catch that. Try again, or tap Type it.");
+    changeWord(word);
     return;
   }
-  showPreview("Tidying up…", "busy");
+  handleMessage(heard);
+}
+
+async function handleMessage(heard) {
+  if (!heard) {
+    if (state.draft) render();
+    showMessage("I didn't catch that. Tap the red button and try again.");
+    return;
+  }
+  state.busy = true;
+  showMessage("Tidying up…");
   try {
     const tidied = await tidy(heard);
-    draft = draft ? draft + " " + tidied : tidied;
-    showPreview(draft);
+    if (state.example) Object.assign(state, { heard: "", draft: "", example: false });
+    state.heard = state.heard ? state.heard + " " + heard : heard;
+    state.draft = state.draft ? state.draft + " " + tidied : tidied;
+    state.busy = false;
+    render();
     if (settings.autoRead) readBack();
   } catch (err) {
-    showPreview(err.message, "busy");
+    state.busy = false;
+    showMessage(err.message);
   }
 }
 
-el.micBtn.addEventListener("click", () => {
-  if (recorder) recorder.stop();
-  else if (recognition) recognition.stop();
-  else startListening();
+el.micBtn.addEventListener("click", () => (isListening() ? stopListening() : startListening("message")));
+
+// ---------- Fixing one word ----------
+function openFix(index) {
+  if (state.busy || isListening()) return;
+  stopSpeaking();
+  const t = tokens(state.draft)[index];
+  const [, , core] = t.text.match(/^([^\p{L}\p{N}]*)(.*?)([^\p{L}\p{N}]*)$/u);
+  if (!core) return;
+  const { words } = compare(state.heard, state.draft);
+  const was = words[index].was;
+  state.fixing = { index, core, was };
+
+  el.fixTitle.textContent = "";
+  el.fixTitle.append("Change ");
+  const strong = document.createElement("strong");
+  strong.textContent = `"${core}"`;
+  el.fixTitle.append(strong);
+  el.fixRevert.hidden = !was;
+  el.fixRevert.textContent = `Use what you said: "${was}"`;
+  el.fixActions.hidden = false;
+  el.fixTypeRow.hidden = true;
+  el.fixAlways.checked = true;
+  showFixPanel(true);
+}
+
+function showFixPanel(on) {
+  el.fixPanel.hidden = !on;
+  el.previewWrap.hidden = on;
+  el.controls.hidden = on;
+  el.bottomRow.hidden = on;
+  if (!on) {
+    state.fixing = null;
+    listenMode = "message";
+  }
+}
+
+function changeWord(word) {
+  const { index, core, was } = state.fixing;
+  const t = tokens(state.draft)[index];
+  const [, before, , after] = t.text.match(/^([^\p{L}\p{N}]*)(.*?)([^\p{L}\p{N}]*)$/u);
+  state.draft = state.draft.slice(0, t.start) + before + word + after + state.draft.slice(t.end);
+
+  if (el.fixAlways.checked) {
+    // Remember it against what the phone heard, so it's fixed before anything else
+    const from = (was && !/\s/.test(was) ? was : core).toLowerCase();
+    if (word.toLowerCase() === from) delete fixes[from];
+    else fixes[from] = word;
+    save("fixes", fixes);
+    save("defaultFixesAdded", true);
+  }
+  showFixPanel(false);
+  render();
+}
+
+el.preview.addEventListener("click", (e) => {
+  const span = e.target.closest(".w");
+  if (span && state.draft) openFix(+span.dataset.index);
+});
+el.preview.addEventListener("keydown", (e) => {
+  const span = e.target.closest(".w");
+  if (span && (e.key === "Enter" || e.key === " ")) {
+    e.preventDefault();
+    openFix(+span.dataset.index);
+  }
+});
+// Going back to what they said is a one-off; it never removes a saved fix
+el.fixRevert.addEventListener("click", () => {
+  el.fixAlways.checked = false;
+  changeWord(state.fixing.was);
+});
+el.fixSay.addEventListener("click", () => (isListening() ? stopListening() : startListening("word")));
+el.fixTypeBtn.addEventListener("click", () => {
+  el.fixActions.hidden = true;
+  el.fixTypeRow.hidden = false;
+  el.fixInput.value = state.fixing.core;
+  el.fixInput.focus();
+  el.fixInput.setSelectionRange(el.fixInput.value.length, el.fixInput.value.length);
+});
+el.fixSave.addEventListener("click", () => {
+  const word = el.fixInput.value.trim();
+  if (word) changeWord(word);
+});
+el.fixInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") el.fixSave.click();
+});
+el.fixCancel.addEventListener("click", () => {
+  if (isListening()) stopListening();
+  showFixPanel(false);
+  render();
 });
 
 // ---------- Speech and tidy-up services ----------
@@ -288,15 +584,12 @@ function renderField() {
 }
 
 el.readBtn.addEventListener("click", () => (utterance ? stopSpeaking() : readBack()));
-el.clearBtn.addEventListener("click", () => {
-  stopSpeaking();
-  resetPreview();
-});
+el.clearBtn.addEventListener("click", clearDraft);
 el.insertBtn.addEventListener("click", () => {
   stopSpeaking();
-  fieldText = fieldText ? fieldText + " " + draft : draft;
+  fieldText = fieldText ? fieldText + " " + state.draft : state.draft;
   renderField();
-  resetPreview();
+  clearDraft();
 });
 el.sendArrow.addEventListener("click", () => {
   const b = document.createElement("div");
@@ -311,5 +604,5 @@ el.sendArrow.addEventListener("click", () => {
   renderField();
 });
 
-resetPreview();
+render();
 renderField();
