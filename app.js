@@ -527,7 +527,7 @@ Fix spelling and punctuation in anything you add. Do not make other improvements
 Reply with the full updated message text only.`;
 
 function knownWords() {
-  const w = [settings.words.trim(), ...Object.values(fixes)].filter(Boolean).join(", ");
+  const w = settings.words.trim();
   return w ? `\nNames and words they use, spelled correctly: ${w}` : "";
 }
 
@@ -635,11 +635,19 @@ async function tidy(raw) {
   if (!settings.anthropicKey) return basicTidy(raw);
   const person = people[state.to];
   const who = person ? `\nThe message is to: ${person.name}` : "";
-  const tidied = await askClaude(
+  // With the AI, fixes are hints rather than forced swaps, so it can still
+  // write "sticker" when the sentence really means a sticker.
+  return askClaude(
     TIDY_SYSTEM[settings.tidy] || TIDY_SYSTEM.normal,
-    `<dictation>\n${raw}\n</dictation>${who}${knownWords()}`
+    `<dictation>\n${raw}\n</dictation>${who}${knownWords()}${fixHints()}`
   );
-  return applyFixes(tidied);
+}
+
+function fixHints() {
+  const entries = Object.entries(fixes);
+  if (!entries.length) return "";
+  const lines = entries.map(([heard, meant]) => `- "${heard}" usually means "${meant}"`).join("\n");
+  return `\nWords the phone often mishears for this person. Use the sentence to decide; keep the heard word when it clearly fits:\n${lines}`;
 }
 
 // ---------- Fixing one word ----------
