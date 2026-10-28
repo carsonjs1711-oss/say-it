@@ -24,6 +24,7 @@ const DEFAULT_SETTINGS = {
   anthropicKey: "",
   autoRead: true,
   rate: "1",
+  voice: "sys:auto", // sys:auto, sys:<phone voice>, or ai:<OpenAI voice>
   size: "l",
   tint: "blue",
   font: "lexend",
@@ -376,19 +377,123 @@ function renderPhrases() {
 }
 
 // ---------- Reading out loud ----------
+// `utterance` is whatever is reading right now (a phone voice or the AI voice), or null
 let utterance = null;
 
-function speak(text) {
-  if (!("speechSynthesis" in window) || !text) return;
+// Novelty and robotic voices that ship with phones; never picked automatically
+const ODD_VOICES = /albert|bad news|bahh|bells|boing|bubbles|cellos|good news|jester|organ|superstar|trinoids|whisper|wobble|zarvox|grandma|grandpa|rocko|shelley|sandy|flo|eddy|reed|fred|junior|ralph|kathy/i;
+
+function phoneVoices() {
+  if (!("speechSynthesis" in window)) return [];
+  return speechSynthesis.getVoices().filter((v) => /^en/i.test(v.lang));
+}
+
+// The most natural English voice on this phone: Premium/Enhanced first, Australian accent preferred
+function bestPhoneVoice() {
+  const score = (v) =>
+    (/premium/i.test(v.name) ? 6 : 0) +
+    (/enhanced/i.test(v.name) ? 5 : 0) +
+    (/en[-_]AU/i.test(v.lang) ? 3 : /en[-_]GB/i.test(v.lang) ? 2 : 1) -
+    (ODD_VOICES.test(v.name) ? 10 : 0);
+  return phoneVoices().sort((a, b) => score(b) - score(a))[0] || null;
+}
+
+function chosenPhoneVoice() {
+  if (settings.voice.startsWith("sys:") && settings.voice !== "sys:auto") {
+    const v = phoneVoices().find((v) => "sys:" + v.voiceURI === settings.voice);
+    if (v) return v;
+  }
+  return bestPhoneVoice();
+}
+
+function usingAiVoice() {
+  return settings.voice.startsWith("ai:") && !!settings.openaiKey;
+}
+
+// Speak with the phone's own voice. Returns the utterance, or null if the phone can't.
+function speakWithPhone(text) {
+  if (!("speechSynthesis" in window) || !text) return null;
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
+  const voice = chosenPhoneVoice();
+  if (voice) {
+    u.voice = voice;
+    u.lang = voice.lang;
+  }
   u.rate = Number(settings.rate) || 1;
   speechSynthesis.speak(u);
   return u;
 }
 
+// One audio player, unlocked by the first tap, because iPhone only lets a page play
+// sound that started from a tap and the AI voice arrives a moment later
+const aiAudio = new Audio();
+let audioUnlocked = false;
+document.addEventListener(
+  "pointerdown",
+  () => {
+    if (audioUnlocked) return;
+    audioUnlocked = true;
+    aiAudio.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+    aiAudio.play().catch(() => {});
+  },
+  { capture: true }
+);
+
+const aiVoiceCache = new Map(); // text+voice -> audio URL, so reading again is instant
+
+async function aiVoiceUrl(text) {
+  const voice = settings.voice.slice(3);
+  const cacheKey = voice + "|" + text;
+  if (aiVoiceCache.has(cacheKey)) return aiVoiceCache.get(cacheKey);
+  const request = (body) =>
+    fetch("https://api.openai.com/v1/audio/speech", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + settings.openaiKey, "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  let res = await request({
+    model: "gpt-4o-mini-tts",
+    voice,
+    input: text,
+    instructions: "Speak clearly and warmly with a natural Australian accent, at a relaxed pace, like reading a text message back to a friend.",
+    response_format: "mp3",
+  });
+  if (res.status === 400 || res.status === 404) res = await request({ model: "tts-1", voice, input: text, response_format: "mp3" });
+  if (!res.ok) throw new Error("ai voice " + res.status);
+  const url = URL.createObjectURL(await res.blob());
+  aiVoiceCache.set(cacheKey, url);
+  return url;
+}
+
+// Speak with the AI voice. `onTime(fraction)` reports progress for highlighting.
+// Resolves when it finishes; rejects if it can't play, so the caller can fall back.
+async function speakWithAi(text, onTime) {
+  const url = await aiVoiceUrl(text);
+  aiAudio.src = url;
+  aiAudio.playbackRate = Number(settings.rate) || 1;
+  aiAudio.ontimeupdate = () => aiAudio.duration && onTime?.(aiAudio.currentTime / aiAudio.duration);
+  await aiAudio.play();
+  await new Promise((resolve) => {
+    aiAudio.onended = aiAudio.onpause = resolve;
+  });
+}
+
+// Say a single word or name, e.g. when choosing between options
+function speak(text) {
+  if (!text) return;
+  stopSpeaking();
+  if (usingAiVoice()) {
+    speakWithAi(text).catch(() => speakWithPhone(text));
+    return;
+  }
+  speakWithPhone(text);
+}
+
 function stopSpeaking() {
   if ("speechSynthesis" in window) speechSynthesis.cancel();
+  aiAudio.onpause = aiAudio.onended = aiAudio.ontimeupdate = null;
+  aiAudio.pause();
   utterance = null;
   clearHighlight();
   el.readLabel.textContent = "Read to me";
@@ -401,27 +506,46 @@ function clearHighlight() {
 
 function readAloud(container = el.message, text = currentText(), label = el.readLabel) {
   if (!text) return;
-  if (!("speechSynthesis" in window)) {
-    setStatus("This phone can't read out loud in the browser.", "error");
-    return;
-  }
   if (state.typing) toggleTyping();
   stopSpeaking();
   const words = [...container.querySelectorAll(".w")];
   const idle = label.textContent;
-  utterance = speak(text);
-  label.textContent = "Stop reading";
-  utterance.onboundary = (e) => {
-    if (e.name && e.name !== "word") return;
+  const highlightAt = (charIndex) => {
     clearHighlight();
-    const w = words.find((s) => e.charIndex >= +s.dataset.start && e.charIndex < +s.dataset.end);
+    const w = words.find((s) => charIndex >= +s.dataset.start && charIndex < +s.dataset.end);
     if (w) w.classList.add("on");
   };
-  utterance.onend = utterance.onerror = () => {
+  const done = (who) => {
+    if (utterance !== who) return;
     clearHighlight();
     label.textContent = idle;
     utterance = null;
   };
+  label.textContent = "Stop reading";
+
+  const withPhone = () => {
+    const u = speakWithPhone(text);
+    if (!u) {
+      label.textContent = idle;
+      setStatus("This phone can't read out loud in the browser.", "error");
+      return;
+    }
+    utterance = u;
+    u.onboundary = (e) => {
+      if (!e.name || e.name === "word") highlightAt(e.charIndex);
+    };
+    u.onend = u.onerror = () => done(u);
+  };
+
+  if (!usingAiVoice()) return withPhone();
+  // The AI voice gives no word timings, so the highlight follows how far through it is
+  const ai = { ai: true };
+  utterance = ai;
+  speakWithAi(text, (fraction) => utterance === ai && highlightAt(Math.floor(fraction * text.length)))
+    .then(() => done(ai))
+    .catch(() => {
+      if (utterance === ai) withPhone();
+    });
 }
 
 // ---------- Listening ----------
@@ -1128,6 +1252,7 @@ const settingFields = {
   setAnthropic: "anthropicKey",
   setAutoRead: "autoRead",
   setRate: "rate",
+  setVoice: "voice",
   setSize: "size",
   setTint: "tint",
   setFont: "font",
@@ -1136,12 +1261,40 @@ const settingFields = {
   setMyName: "myName",
 };
 
+// Voices for Settings: the best phone voice, every English phone voice, and the AI voices
+function fillVoiceList() {
+  const select = $("setVoice");
+  select.textContent = "";
+  const add = (value, label, group = select) => {
+    const o = document.createElement("option");
+    o.value = value;
+    o.textContent = label;
+    group.append(o);
+  };
+  const best = bestPhoneVoice();
+  add("sys:auto", "Best voice on this phone" + (best ? ` (${best.name})` : ""));
+  const phone = document.createElement("optgroup");
+  phone.label = "Voices on this phone";
+  phoneVoices()
+    .filter((v) => !ODD_VOICES.test(v.name))
+    .forEach((v) => add("sys:" + v.voiceURI, `${v.name} (${v.lang})`, phone));
+  if (phone.children.length) select.append(phone);
+  const ai = document.createElement("optgroup");
+  ai.label = settings.openaiKey ? "Natural AI voices" : "Natural AI voices (need a speech key)";
+  [["coral", "Coral, warm"], ["sage", "Sage, calm"], ["ash", "Ash, clear"], ["ballad", "Ballad, soft"]].forEach(([id, name]) =>
+    add("ai:" + id, name, ai)
+  );
+  select.append(ai);
+}
+
 function openSettings() {
+  fillVoiceList();
   for (const [id, key] of Object.entries(settingFields)) {
     const input = $(id);
     if (input.type === "checkbox") input.checked = !!settings[key];
     else input.value = settings[key];
   }
+  if (!$("setVoice").value) $("setVoice").value = "sys:auto";
   renderPeopleList();
   renderFixesList();
   $("settingsDialog").showModal();
@@ -1236,7 +1389,23 @@ el.fixDialog.addEventListener("close", () => {
 
 $("openSettings").addEventListener("click", openSettings);
 el.settingsDialog.addEventListener("close", readSettingsForm);
-["setSize", "setTint", "setFont"].forEach((id) => $(id).addEventListener("change", readSettingsForm));
+["setSize", "setTint", "setFont", "setVoice", "setRate"].forEach((id) => $(id).addEventListener("change", readSettingsForm));
+$("testVoice").addEventListener("click", () => {
+  readSettingsForm();
+  if (settings.voice.startsWith("ai:") && !settings.openaiKey) {
+    speak("The AI voices need a speech key. This is the phone's own voice.");
+    return;
+  }
+  speak("G'day. This is how Say It will read your messages back to you.");
+});
+// Phones load their voice list a moment after the page opens
+if ("speechSynthesis" in window) {
+  speechSynthesis.addEventListener?.("voiceschanged", () => {
+    if (!el.settingsDialog.open) return;
+    fillVoiceList();
+    $("setVoice").value = settings.voice;
+  });
+}
 
 el.pickContact.addEventListener("click", pickFromContacts);
 $("cancelPerson").addEventListener("click", () => el.personDialog.close());

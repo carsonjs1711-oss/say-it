@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
-  <link rel="stylesheet" href="styles.css?v=9">
+  <link rel="stylesheet" href="styles.css?v=10">
 </head>
 <body>
   <div class="app">
@@ -202,6 +202,12 @@
       <fieldset>
         <legend>Reading out loud</legend>
         <label class="check"><input type="checkbox" id="setAutoRead"> Read my message back after I speak</label>
+        <label for="setVoice">Voice</label>
+        <div class="voice-row">
+          <select id="setVoice"></select>
+          <button type="button" class="ghost" id="testVoice">Test</button>
+        </div>
+        <p class="hint">For a more natural phone voice on iPhone: Settings → Accessibility → Spoken Content → Voices → English. Download one marked Enhanced or Premium (Karen and Lee are Australian), then pick it here. The AI voices sound the most natural and need a speech key.</p>
         <label for="setRate">Reading speed</label>
         <select id="setRate">
           <option value="0.8">Slow</option>
@@ -244,13 +250,13 @@
       </fieldset>
 
       <div class="sheet-actions">
-        <span class="hint version">Version 9</span>
+        <span class="hint version">Version 10</span>
         <button type="submit" class="primary" id="closeSettings">Done</button>
       </div>
     </form>
   </dialog>
 
   <script src="compare.js?v=1"></script>
-  <script src="app.js?v=9"></script>
+  <script src="app.js?v=10"></script>
 </body>
 </html>
