@@ -238,3 +238,5 @@ svg { width: 1.4em; height: 1.4em; fill: none; stroke: currentColor; stroke-widt
 }
 .version { margin-right: auto; }
 .people-tip { flex: 1 0 180px; align-self: center; margin: 0; font-size: 0.9rem; line-height: 1.4; color: var(--muted); white-space: normal; }
+.message .w { cursor: pointer; }
+.sub { margin: 8px 0 0; font-size: 0.95rem; font-weight: 600; }

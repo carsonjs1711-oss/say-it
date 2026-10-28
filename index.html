@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
-  <link rel="stylesheet" href="styles.css?v=4">
+  <link rel="stylesheet" href="styles.css?v=5">
 </head>
 <body>
   <div class="app">
@@ -96,6 +96,20 @@
     </form>
   </dialog>
 
+  <!-- Fix one word -->
+  <dialog id="fixDialog" class="sheet" aria-labelledby="fixTitle">
+    <form method="dialog" id="fixForm">
+      <h2 id="fixTitle">Change word</h2>
+      <label for="fixInput">Change it to</label>
+      <input id="fixInput" autocomplete="off" autocapitalize="off" spellcheck="true" required>
+      <label class="check"><input type="checkbox" id="fixAlways"> Always fix this word</label>
+      <div class="sheet-actions">
+        <button type="button" class="ghost" id="cancelFix">Cancel</button>
+        <button type="submit" class="primary">Change</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- Settings -->
   <dialog id="settingsDialog" class="sheet" aria-labelledby="settingsTitle">
     <form method="dialog" id="settingsForm">
@@ -146,6 +160,8 @@
         <label for="setWords">Names and words it should know</label>
         <textarea id="setWords" rows="3" placeholder="silicone, Kayden, Llanelli, brekkie"></textarea>
         <p class="hint">Separate with commas. Add names, places and work words. If it hears something close, like "silicon", it uses your spelling, "silicone".</p>
+        <h3 class="sub">Words it always fixes</h3>
+        <ul class="people-list" id="fixesList"></ul>
       </fieldset>
 
       <fieldset>
@@ -166,12 +182,12 @@
       </fieldset>
 
       <div class="sheet-actions">
-        <span class="hint version">Version 4</span>
+        <span class="hint version">Version 5</span>
         <button type="submit" class="primary" id="closeSettings">Done</button>
       </div>
     </form>
   </dialog>
 
-  <script src="app.js?v=4"></script>
+  <script src="app.js?v=5"></script>
 </body>
 </html>

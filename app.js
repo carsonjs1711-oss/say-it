@@ -45,6 +45,7 @@ const AVATAR_COLOURS = ["#2c5a99", "#16704a", "#8a3fa0", "#b0521d", "#1f7d8c", "
 const settings = { ...DEFAULT_SETTINGS, ...store.get("settings", {}) };
 let people = store.get("people", []);
 const phrases = store.get("phrases", DEFAULT_PHRASES);
+let fixes = store.get("fixes", {}); // heard word -> word they meant, e.g. silicon -> silicone
 
 const state = {
   to: null, // index into people
@@ -83,6 +84,12 @@ const el = {
   pickContact: $("pickContact"),
   settingsDialog: $("settingsDialog"),
   peopleList: $("peopleList"),
+  fixDialog: $("fixDialog"),
+  fixForm: $("fixForm"),
+  fixTitle: $("fixTitle"),
+  fixInput: $("fixInput"),
+  fixAlways: $("fixAlways"),
+  fixesList: $("fixesList"),
 };
 
 const isIOS =
@@ -124,6 +131,8 @@ function renderMessage() {
       if (m.index > last) el.message.append(text.slice(last, m.index));
       const span = document.createElement("span");
       span.className = "w";
+      span.setAttribute("role", "button");
+      span.tabIndex = 0;
       span.dataset.start = m.index;
       span.dataset.end = m.index + m[0].length;
       span.textContent = m[0];
@@ -435,7 +444,10 @@ async function handleHeard(heard) {
     }
     state.showingOriginal = false;
     setBusy(false);
-    setStatus(settings.anthropicKey ? "Here's your message. Check it, then tap Send." : "Here's what I heard. Check it, then tap Send.");
+    setStatus(
+      (settings.anthropicKey ? "Here's your message." : "Here's what I heard.") +
+        " Tap any wrong word to change it, then tap Send."
+    );
     renderMessage();
     if (settings.autoRead) readAloud();
   } catch (err) {
@@ -501,7 +513,7 @@ Fix spelling and punctuation in anything you add. Do not make other improvements
 Reply with the full updated message text only.`;
 
 function knownWords() {
-  const w = settings.words.trim();
+  const w = [settings.words.trim(), ...Object.values(fixes)].filter(Boolean).join(", ");
   return w ? `\nNames and words they use, spelled correctly: ${w}` : "";
 }
 
@@ -585,8 +597,23 @@ function applyKnownWords(text) {
   });
 }
 
+function matchCase(heard, replacement) {
+  return heard[0] === heard[0].toUpperCase() && replacement[0] === replacement[0].toLowerCase()
+    ? replacement[0].toUpperCase() + replacement.slice(1)
+    : replacement;
+}
+
+// Fixes the person has asked for by tapping a word, applied every time
+function applyFixes(text) {
+  if (!Object.keys(fixes).length) return text;
+  return text.replace(/[A-Za-z'’]+/g, (word) => {
+    const fix = fixes[word.toLowerCase()];
+    return fix ? matchCase(word, fix) : word;
+  });
+}
+
 function basicTidy(text) {
-  const t = applyKnownWords(text.trim().replace(/\s+/g, " "));
+  const t = applyKnownWords(applyFixes(text.trim().replace(/\s+/g, " ")));
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
@@ -594,10 +621,76 @@ async function tidy(raw) {
   if (!settings.anthropicKey) return basicTidy(raw);
   const person = people[state.to];
   const who = person ? `\nThe message is to: ${person.name}` : "";
-  return askClaude(
+  const tidied = await askClaude(
     TIDY_SYSTEM[settings.tidy] || TIDY_SYSTEM.normal,
     `<dictation>\n${raw}\n</dictation>${who}${knownWords()}`
   );
+  return applyFixes(tidied);
+}
+
+// ---------- Fixing one word ----------
+let fixTarget = null; // { start, end, core, before, after } in the current text
+
+function openFix(span) {
+  stopSpeaking();
+  const text = currentText();
+  const start = +span.dataset.start;
+  const end = +span.dataset.end;
+  // Keep punctuation stuck to the word ("silicon." -> edit "silicon", keep ".")
+  const [, before, core, after] = text.slice(start, end).match(/^([^\p{L}\p{N}]*)(.*?)([^\p{L}\p{N}]*)$/u);
+  if (!core) return;
+  fixTarget = { start, end, core, before, after };
+  el.fixTitle.textContent = `Change "${core}"`;
+  el.fixInput.value = core;
+  el.fixAlways.checked = core.length >= 3;
+  el.fixDialog.showModal();
+  el.fixInput.focus();
+  el.fixInput.setSelectionRange(core.length, core.length);
+}
+
+function saveFix() {
+  const word = el.fixInput.value.trim();
+  if (!fixTarget || !word || word === fixTarget.core) return;
+  const { start, end, core, before, after } = fixTarget;
+  const text = currentText();
+  state.text = text.slice(0, start) + before + word + after + text.slice(end);
+  state.showingOriginal = false;
+  if (el.fixAlways.checked && !/\s/.test(core)) {
+    fixes[core.toLowerCase()] = word;
+    store.set("fixes", fixes);
+    setStatus(`Done. From now on "${core}" will always be changed to "${word}".`);
+  } else {
+    setStatus("Done.");
+  }
+  renderMessage();
+}
+
+function renderFixesList() {
+  el.fixesList.textContent = "";
+  const entries = Object.entries(fixes);
+  if (!entries.length) {
+    const li = document.createElement("li");
+    li.className = "hint";
+    li.textContent = "None yet. Tap a wrong word in your message to fix it for good.";
+    el.fixesList.append(li);
+    return;
+  }
+  entries.forEach(([heard, meant]) => {
+    const li = document.createElement("li");
+    const who = document.createElement("span");
+    who.className = "who";
+    who.textContent = `${heard} → ${meant}`;
+    const rm = document.createElement("button");
+    rm.type = "button";
+    rm.textContent = "Remove";
+    rm.addEventListener("click", () => {
+      delete fixes[heard];
+      store.set("fixes", fixes);
+      renderFixesList();
+    });
+    li.append(who, rm);
+    el.fixesList.append(li);
+  });
 }
 
 async function changeMessage(message, request) {
@@ -724,6 +817,7 @@ function openSettings() {
     else input.value = settings[key];
   }
   renderPeopleList();
+  renderFixesList();
   $("settingsDialog").showModal();
 }
 
@@ -763,6 +857,24 @@ el.clearBtn.addEventListener("click", () => {
 });
 el.messageEdit.addEventListener("input", renderSend);
 el.sendBtn.addEventListener("click", send);
+
+el.message.addEventListener("click", (e) => {
+  const span = e.target.closest(".w");
+  if (span) openFix(span);
+});
+el.message.addEventListener("keydown", (e) => {
+  const span = e.target.closest(".w");
+  if (span && (e.key === "Enter" || e.key === " ")) {
+    e.preventDefault();
+    openFix(span);
+  }
+});
+el.fixForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  saveFix();
+  el.fixDialog.close();
+});
+$("cancelFix").addEventListener("click", () => el.fixDialog.close());
 
 $("openSettings").addEventListener("click", openSettings);
 el.settingsDialog.addEventListener("close", readSettingsForm);
