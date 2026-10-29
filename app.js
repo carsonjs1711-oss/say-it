@@ -121,8 +121,12 @@ function effectiveModel(job = settings.mode) {
   return "cheapest";
 }
 
+// Set when OpenAI speech fails (no credit, bad key, blocked), so the red button
+// carries on with the iPhone's own speech until the app is reopened
+let openAiSpeechProblem = false;
+
 function useOpenAiSpeech() {
-  return !!settings.openaiKey && (settings.plan === "custom" || proActive());
+  return !openAiSpeechProblem && !!settings.openaiKey && (settings.plan === "custom" || proActive());
 }
 
 function capNote() {
@@ -1127,18 +1131,33 @@ async function transcribe(blob) {
         body: form,
       });
     } catch {
-      throw new Error("Couldn't reach the speech service. Check your internet and try again.");
+      throw speechProblem("Couldn't reach OpenAI's speech service. Check your internet.");
     }
     return res;
   };
 
   let res = await send("gpt-4o-transcribe");
   if (res.status === 400 || res.status === 404) res = await send("whisper-1");
-  if (res.status === 401) throw new Error("The speech key isn't working. Check it in Settings.");
-  if (res.status === 429) throw new Error("The speech service is busy or out of credit. Try again in a minute.");
-  if (!res.ok) throw new Error("The speech service had a problem. Try again.");
+  if (!res.ok) {
+    const code = (await res.json().catch(() => ({})))?.error?.code || "";
+    if (res.status === 401) throw speechProblem("The OpenAI speech key isn't working. Check it in Settings.");
+    if (res.status === 403) {
+      throw speechProblem("The OpenAI key isn't allowed to do speech recognition. Make a new key with All permissions.");
+    }
+    if (code === "insufficient_quota") {
+      throw speechProblem("Your OpenAI account has no credit. Add some at platform.openai.com → Settings → Billing.");
+    }
+    if (res.status === 429) throw new Error("OpenAI's speech service is busy. Try again in a minute.");
+    throw speechProblem("OpenAI's speech service had a problem.");
+  }
   const data = await res.json();
   return (data.text || "").trim();
+}
+
+// Turn OpenAI speech off for now and say so, so the next tap uses the iPhone's speech
+function speechProblem(why) {
+  openAiSpeechProblem = true;
+  return new Error(why + " For now, Say It will use the iPhone's own speech. Tap the red button to say it again.");
 }
 
 // ---------- Tidy up (Claude) ----------
