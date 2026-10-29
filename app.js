@@ -1441,6 +1441,37 @@ function renderPlan() {
   $("planKeyNote").hidden = !(settings.plan === "pro" && !settings.openaiKey);
 }
 
+// Big buttons for switching plans, so it never depends on a drop-down list
+function openPlanPicker() {
+  const list = $("planList");
+  list.textContent = "";
+  Object.entries(PLANS).forEach(([key, plan]) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "plan-option";
+    b.setAttribute("aria-pressed", String(settings.plan === key));
+    const head = document.createElement("strong");
+    head.textContent = `${plan.name} · ${plan.price}` + (settings.plan === key ? " (current)" : "");
+    const about = document.createElement("span");
+    about.textContent = plan.about;
+    b.append(head, about);
+    b.addEventListener("click", () => setPlan(key));
+    list.append(b);
+  });
+  $("planDialog").showModal();
+}
+
+function setPlan(key) {
+  settings.plan = key;
+  store.set("settings", settings);
+  $("setPlan").value = key;
+  $("planDialog").close();
+  renderPlan();
+  renderModes();
+  renderMessage();
+  setStatus(`You're now on ${PLANS[key].name}.`);
+}
+
 function renderUsage() {
   const lines = Object.entries(AI_MODELS)
     .filter(([key]) => aiUsage[key]?.n)
@@ -1909,6 +1940,13 @@ el.fixDialog.addEventListener("close", () => {
 });
 
 $("openSettings").addEventListener("click", openSettings);
+$("planBadge").addEventListener("click", openPlanPicker);
+$("planFromSettings").addEventListener("click", () => {
+  readSettingsForm();
+  el.settingsDialog.close();
+  openPlanPicker();
+});
+$("planClose").addEventListener("click", () => $("planDialog").close());
 el.settingsDialog.addEventListener("close", readSettingsForm);
 ["setSize", "setTint", "setFont", "setVoice", "setRate", "setPlan", "setModel"].forEach((id) => $(id).addEventListener("change", readSettingsForm));
 $("testVoice").addEventListener("click", () => {

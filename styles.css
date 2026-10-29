@@ -356,3 +356,13 @@ svg { width: 1.4em; height: 1.4em; fill: none; stroke: currentColor; stroke-widt
   border-radius: 999px; background: var(--accent-soft); color: var(--accent);
 }
 .custom-only { display: flex; flex-direction: column; gap: 8px; }
+button.plan-badge { border: 1px solid transparent; cursor: pointer; font-family: inherit; }
+button.plan-badge::after { content: " ▾"; font-size: 0.7em; }
+.plan-list { display: flex; flex-direction: column; gap: 10px; }
+.plan-option {
+  display: flex; flex-direction: column; gap: 4px; text-align: left;
+  border: 2px solid var(--line); background: var(--surface); border-radius: 14px; padding: 14px;
+}
+.plan-option strong { font-size: 1.05rem; }
+.plan-option span { font-size: 0.9rem; color: var(--muted); line-height: 1.4; }
+.plan-option[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }

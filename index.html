@@ -15,12 +15,12 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
-  <link rel="stylesheet" href="styles.css?v=14">
+  <link rel="stylesheet" href="styles.css?v=16">
 </head>
 <body>
   <div class="app">
     <header class="top">
-      <h1 class="brand">Say It <span class="plan-badge" id="planBadge">Plus</span></h1>
+      <h1 class="brand">Say It <button class="plan-badge" id="planBadge" aria-label="Change plan">Plus</button></h1>
       <button class="icon-btn" id="openSettings" aria-label="Settings">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
         <span>Settings</span>
@@ -235,6 +235,18 @@
     </div>
   </dialog>
 
+  <!-- Choose a plan -->
+  <dialog id="planDialog" class="sheet" aria-labelledby="planTitle">
+    <div class="fix-sheet">
+      <h2 id="planTitle">Choose a plan</h2>
+      <p class="hint">Test version: this changes what the app does. Nobody is charged.</p>
+      <div class="plan-list" id="planList"></div>
+      <div class="sheet-actions">
+        <button type="button" class="ghost" id="planClose">Close</button>
+      </div>
+    </div>
+  </dialog>
+
   <!-- Settings -->
   <dialog id="settingsDialog" class="sheet" aria-labelledby="settingsTitle">
     <form method="dialog" id="settingsForm">
@@ -250,6 +262,7 @@
           <option value="custom">Custom (testing)</option>
         </select>
         <p class="hint" id="planAbout"></p>
+        <button type="button" class="wide-btn" id="planFromSettings">Change plan</button>
         <p class="hint" id="planUsage" hidden></p>
         <p class="hint" id="planKeyNote" hidden>Pro's speech recognition and natural voice need a speech key (OpenAI) below. Without one, Pro uses the iPhone's own.</p>
         <p class="hint">Test version: switching plans changes what the app does. Nobody is charged.</p>
@@ -341,7 +354,7 @@
       </fieldset>
 
       <div class="sheet-actions">
-        <span class="hint version">Version 15</span>
+        <span class="hint version">Version 16</span>
         <button type="submit" class="primary" id="closeSettings">Done</button>
       </div>
     </form>
@@ -349,6 +362,6 @@
 
   <script src="compare.js?v=1"></script>
   <script src="calendar.js?v=1"></script>
-  <script src="app.js?v=15"></script>
+  <script src="app.js?v=16"></script>
 </body>
 </html>
