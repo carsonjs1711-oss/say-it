@@ -349,3 +349,10 @@ svg { width: 1.4em; height: 1.4em; fill: none; stroke: currentColor; stroke-widt
 .compare-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .compare-actions button { padding: 8px 16px; }
 .ghost.small { align-self: flex-start; padding: 6px 14px; font-size: 0.85rem; }
+
+.plan-badge {
+  display: inline-block; vertical-align: middle; margin-left: 6px; padding: 2px 10px;
+  font-size: 0.8rem; font-weight: 600; letter-spacing: 0.02em;
+  border-radius: 999px; background: var(--accent-soft); color: var(--accent);
+}
+.custom-only { display: flex; flex-direction: column; gap: 8px; }

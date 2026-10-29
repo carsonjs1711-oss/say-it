@@ -31,7 +31,8 @@ const DEFAULT_SETTINGS = {
   tidy: "normal",
   words: "",
   mode: "mate", // mate | client | email | calendar
-  model: "best", // best | balanced | cheapest, see AI_MODELS
+  plan: "plus", // free | plus | pro | custom, see PLANS
+  model: "best", // best | balanced | cheapest, see AI_MODELS; used by the Custom plan
   myName: "",
 };
 const DEFAULT_PHRASES = [
@@ -65,6 +66,68 @@ const AI_MODELS = {
   balanced: { id: "claude-sonnet-5-5", name: "Balanced", fullName: "Claude Sonnet 5.5", input: 2, output: 10, fallbacks: true },
   cheapest: { id: "claude-haiku-5-5", name: "Cheapest", fullName: "Claude Haiku 5.5", input: 0.1, output: 0.5, fallbacks: false },
 };
+
+// Free: no AI. Plus: Claude Haiku for everything. Pro: Sonnet, with Opus for emails and
+// events, plus OpenAI speech and the AI voice when a speech key is set, up to
+// PRO_MONTHLY_CAP AI messages a month. Custom keeps the manual settings for testing.
+// Prices are only shown here; this version never charges anyone.
+const PLANS = {
+  free: { name: "Free", price: "Free", about: "iPhone speech and voice, read-back and word fixes. No AI tidy-up." },
+  plus: {
+    name: "Plus",
+    price: "AU$7.95 a month",
+    about: "AI tidy-up (Claude Haiku), ? word checks, and the Mate, Client, Email and Calendar styles. Uses the iPhone's own speech and voice.",
+  },
+  pro: {
+    name: "Pro",
+    price: "AU$19.95 a month",
+    about: "Everything in Plus with smarter AI (Claude Sonnet, and Opus for emails and events), OpenAI speech recognition and the natural AI voice. Up to 1,500 AI messages a month.",
+  },
+  custom: { name: "Custom", price: "Testing", about: "Uses the AI model and voice chosen below." },
+};
+const PRO_MONTHLY_CAP = 1500;
+
+function aiOn() {
+  return !!settings.anthropicKey && settings.plan !== "free";
+}
+
+function thisMonth() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function proUsed() {
+  const used = store.get("proUsage", {});
+  return used.month === thisMonth() ? used.n : 0;
+}
+
+function countProMessage() {
+  if (settings.plan === "pro") store.set("proUsage", { month: thisMonth(), n: proUsed() + 1 });
+}
+
+// Past the cap, Pro carries on with Plus features until the month ends
+function overProCap() {
+  return settings.plan === "pro" && proUsed() >= PRO_MONTHLY_CAP;
+}
+
+function proActive() {
+  return settings.plan === "pro" && !overProCap();
+}
+
+// The model for a job: "mate", "client", "email" or "calendar"
+function effectiveModel(job = settings.mode) {
+  if (settings.plan === "custom") return settings.model;
+  if (proActive()) return job === "email" || job === "calendar" ? "best" : "balanced";
+  return "cheapest";
+}
+
+function useOpenAiSpeech() {
+  return !!settings.openaiKey && (settings.plan === "custom" || proActive());
+}
+
+function capNote() {
+  return overProCap() ? " You've used this month's 1,500 Pro messages, so Say It is on Plus until next month." : "";
+}
 
 // What the AI has cost on this phone, per model: { best: { n, usd }, ... }
 const aiUsage = store.get("aiUsage", {});
@@ -202,7 +265,7 @@ function currentText() {
 }
 
 function calendarMode() {
-  return !!settings.anthropicKey && settings.mode === "calendar";
+  return aiOn() && settings.mode === "calendar";
 }
 
 // Wrap each word so it can be highlighted while it is read out
@@ -235,7 +298,7 @@ function renderChecked(text) {
   const toks = tokens(text);
   const unsureLeft = new Set(state.unsure.map((u) => wordKey(u.word.split(/\s+/)[0])));
   // Client and Email styles rewrite on purpose, so underlining every change there is just noise
-  const underline = settings.mode === "mate" || !settings.anthropicKey;
+  const underline = settings.mode === "mate" || !aiOn();
   const crossedOut = (said, extra = "") => {
     const s = document.createElement("s");
     s.className = "was" + extra;
@@ -316,7 +379,7 @@ function renderEvent() {
 function afterEventStatus() {
   const n = state.event.unsure.length;
   if (n) return `I wasn't sure about ${n === 1 ? "one detail" : n + " details"}, marked with ?. Tap to check.`;
-  return "Here's your event. Check the day and time, then tap Add to Calendar.";
+  return "Here's your event. Check the day and time, then tap Add to Calendar." + capNote();
 }
 
 async function eventFromSpeech(dictation, current, isChange = false) {
@@ -328,7 +391,8 @@ async function eventFromSpeech(dictation, current, isChange = false) {
   const result = await askClaude(
     eventSystemPrompt(),
     `${existing}<dictation>\n${dictation}\n</dictation>${knownWords()}${fixHints()}`,
-    EVENT_SCHEMA
+    EVENT_SCHEMA,
+    effectiveModel("calendar")
   );
   if (typeof result.message === "string" && !result.date) {
     throw new Error("The tidy-up service couldn't turn that into an event. Try saying the day and time again.");
@@ -484,8 +548,8 @@ function addToGoogleCalendar() {
 function checkSummary(changes) {
   const n = state.unsure.length;
   if (n) return `Check ${n} ${n === 1 ? "word" : "words"} marked ?`;
-  if (settings.anthropicKey && settings.mode === "client") return "Written in Client style";
-  if (settings.anthropicKey && settings.mode === "email") return "Written as an email";
+  if (aiOn() && settings.mode === "client") return "Written in Client style";
+  if (aiOn() && settings.mode === "email") return "Written as an email";
   return `${changes} ${changes === 1 ? "fix" : "fixes"}`;
 }
 
@@ -516,7 +580,7 @@ function renderMessage() {
   el.message.hidden = state.typing;
   el.messageEdit.hidden = !state.typing;
   el.tools.hidden = !text && !state.typing;
-  el.compareBtn.hidden = !settings.anthropicKey || !state.original || calendarMode();
+  el.compareBtn.hidden = !aiOn() || !state.original || calendarMode();
   el.typeBtn.setAttribute("aria-pressed", String(state.typing));
   el.typeLabel.textContent = state.typing ? "Done typing" : "Type";
 
@@ -538,19 +602,23 @@ function renderSend() {
 }
 
 function emailing() {
-  return !!settings.anthropicKey && settings.mode === "email";
+  return aiOn() && settings.mode === "email";
 }
 
 // ---------- Styles ----------
 // Always shown, so people can find them; without the tidy-up key they explain what's missing
 function renderModes() {
-  el.modes.classList.toggle("locked", !settings.anthropicKey);
+  el.modes.classList.toggle("locked", !aiOn());
   el.modeBtns.forEach((b) =>
-    b.setAttribute("aria-checked", String(!!settings.anthropicKey && b.dataset.mode === settings.mode))
+    b.setAttribute("aria-checked", String(aiOn() && b.dataset.mode === settings.mode))
   );
 }
 
 async function setMode(mode) {
+  if (settings.plan === "free") {
+    setStatus("Styles come with Plus and Pro. You can change your plan in Settings.", "error");
+    return;
+  }
   if (!settings.anthropicKey) {
     setStatus("Styles need the tidy-up key. Add it in Settings → Tidy-up key (Anthropic) on this copy of Say It.", "error");
     return;
@@ -688,8 +756,16 @@ function chosenPhoneVoice() {
   return bestPhoneVoice();
 }
 
+// The AI voice to read with, or null for the phone's own voice
+function aiVoiceName() {
+  if (!settings.openaiKey) return null;
+  const chosen = settings.voice.startsWith("ai:") ? settings.voice.slice(3) : null;
+  if (settings.plan === "custom") return chosen;
+  return proActive() ? chosen || "coral" : null;
+}
+
 function usingAiVoice() {
-  return settings.voice.startsWith("ai:") && !!settings.openaiKey;
+  return !!aiVoiceName();
 }
 
 // Speak with the phone's own voice. Returns the utterance, or null if the phone can't.
@@ -725,7 +801,7 @@ document.addEventListener(
 const aiVoiceCache = new Map(); // text+voice -> audio URL, so reading again is instant
 
 async function aiVoiceUrl(text) {
-  const voice = settings.voice.slice(3);
+  const voice = aiVoiceName();
   const cacheKey = voice + "|" + text;
   if (aiVoiceCache.has(cacheKey)) return aiVoiceCache.get(cacheKey);
   const request = (body) =>
@@ -863,7 +939,7 @@ async function startListening(purpose) {
   stopSpeaking();
   if (state.typing) toggleTyping();
   listenPurpose = purpose;
-  if (settings.openaiKey && window.MediaRecorder && navigator.mediaDevices?.getUserMedia) {
+  if (useOpenAiSpeech() && window.MediaRecorder && navigator.mediaDevices?.getUserMedia) {
     await startRecording();
   } else {
     startPhoneSpeech();
@@ -982,8 +1058,8 @@ function setBusy(on, message = "") {
 
 function afterTidyStatus() {
   const n = state.unsure.length;
-  if (n) return `I wasn't sure about ${n} ${n === 1 ? "word" : "words"}, marked with ?. Tap ${n === 1 ? "it" : "one"} to check.`;
-  return (settings.anthropicKey ? "Here's your message." : "Here's what I heard.") + " Tap any wrong word to change it, then tap Send.";
+  if (n) return `I wasn't sure about ${n} ${n === 1 ? "word" : "words"}, marked with ?. Tap ${n === 1 ? "it" : "one"} to check.` + capNote();
+  return (aiOn() ? "Here's your message." : "Here's what I heard.") + " Tap any wrong word to change it, then tap Send." + capNote();
 }
 
 async function handleHeard(heard) {
@@ -1115,7 +1191,7 @@ function knownWords() {
 
 // With a schema the reply is parsed JSON; without one it is plain text.
 // `modelKey` picks from AI_MODELS; it defaults to the one chosen in Settings.
-async function askClaude(system, content, schema, modelKey = settings.model) {
+async function askClaude(system, content, schema, modelKey = effectiveModel()) {
   const model = AI_MODELS[modelKey] || AI_MODELS.best;
   const output_config = { effort: "low" };
   if (schema) output_config.format = { type: "json_schema", schema };
@@ -1147,6 +1223,7 @@ async function askClaude(system, content, schema, modelKey = settings.model) {
   if (!res.ok) throw new Error("The tidy-up service had a problem. Try again.");
   const data = await res.json();
   const cost = recordUsage(modelKey, model, data.usage, performance.now() - started);
+  countProMessage();
   if (data.stop_reason === "refusal") throw new Error("The tidy-up service couldn't help with this message.");
   const text = (data.content || [])
     .filter((b) => b.type === "text")
@@ -1241,8 +1318,8 @@ function basicTidy(text) {
 }
 
 // Returns { message, subject, unsure }. `current` is the email so far, when adding to one.
-async function tidy(raw, current = "", modelKey = settings.model) {
-  if (!settings.anthropicKey) return { message: basicTidy(raw), subject: "", unsure: [] };
+async function tidy(raw, current = "", modelKey = effectiveModel()) {
+  if (!aiOn()) return { message: basicTidy(raw), subject: "", unsure: [] };
   const style = settings.mode === "mate" && settings.tidy === "light" ? STYLES.mateLight : STYLES[settings.mode] || STYLES.mate;
   const person = people[state.to];
   const who = person ? `\nThe message is to: ${person.name}` : "";
@@ -1286,11 +1363,12 @@ async function compareModels() {
   await Promise.all(
     Object.entries(AI_MODELS).map(async ([key, model]) => {
       const card = document.createElement("div");
-      card.className = "compare-card" + (key === settings.model ? " current" : "");
+      const yours = key === effectiveModel();
+      card.className = "compare-card" + (yours ? " current" : "");
       const head = document.createElement("div");
       head.className = "compare-head";
       head.innerHTML = `<strong></strong><span class="hint"></span>`;
-      head.querySelector("strong").textContent = model.name + (key === settings.model ? " (yours now)" : "");
+      head.querySelector("strong").textContent = model.name + (yours ? " (yours now)" : "");
       head.querySelector(".hint").textContent = model.fullName;
       const body = document.createElement("p");
       body.className = "compare-text busy";
@@ -1320,7 +1398,7 @@ async function compareModels() {
         use.addEventListener("click", () => {
           Object.assign(state, { text: result.message, subject: result.subject, unsure: result.unsure, showChanges: false });
           el.compareDialog.close();
-          setStatus(`Using the ${model.name} version. To always use ${model.name}, choose it in Settings → AI model.`);
+          setStatus(`Using the ${model.name} version.`);
           renderMessage();
         });
         actions.append(hear, use);
@@ -1331,6 +1409,17 @@ async function compareModels() {
       }
     })
   );
+}
+
+function renderPlan() {
+  const plan = PLANS[settings.plan] || PLANS.plus;
+  $("planBadge").textContent = plan.name;
+  $("planAbout").textContent = `${plan.price}. ${plan.about}`;
+  const used = proUsed();
+  $("planUsage").hidden = settings.plan !== "pro";
+  $("planUsage").textContent = `This month: ${used} of ${PRO_MONTHLY_CAP} Pro AI messages used.`;
+  $("customOnly").hidden = settings.plan !== "custom";
+  $("planKeyNote").hidden = !(settings.plan === "pro" && !settings.openaiKey);
 }
 
 function renderUsage() {
@@ -1471,8 +1560,8 @@ function renderFixesList() {
 }
 
 async function changeMessage(message, request) {
-  if (!settings.anthropicKey) {
-    throw new Error("To change messages by voice, add a tidy-up key in Settings. You can tap Type instead.");
+  if (!aiOn()) {
+    throw new Error("Changing messages by voice comes with Plus and Pro, and needs the tidy-up key. You can tap Type instead.");
   }
   return askClaude(
     CHANGE_SYSTEM,
@@ -1639,6 +1728,7 @@ const settingFields = {
   setRate: "rate",
   setVoice: "voice",
   setModel: "model",
+  setPlan: "plan",
   setSize: "size",
   setTint: "tint",
   setFont: "font",
@@ -1684,6 +1774,7 @@ function openSettings() {
   renderPeopleList();
   renderFixesList();
   renderUsage();
+  renderPlan();
   $("settingsDialog").showModal();
 }
 
@@ -1695,6 +1786,7 @@ function readSettingsForm() {
   store.set("settings", settings);
   applyLook();
   renderModes();
+  renderPlan();
   renderMessage();
 }
 
@@ -1704,8 +1796,8 @@ el.micBtn.addEventListener("click", () => {
   else startListening("message");
 });
 el.changeBtn.addEventListener("click", () => {
-  if (!settings.anthropicKey) {
-    setStatus("To change messages by voice, add a tidy-up key in Settings. You can tap Type instead.", "error");
+  if (!aiOn()) {
+    setStatus("Changing messages by voice comes with Plus and Pro, and needs the tidy-up key. You can tap Type instead.", "error");
     return;
   }
   startListening("change");
@@ -1799,7 +1891,7 @@ el.fixDialog.addEventListener("close", () => {
 
 $("openSettings").addEventListener("click", openSettings);
 el.settingsDialog.addEventListener("close", readSettingsForm);
-["setSize", "setTint", "setFont", "setVoice", "setRate"].forEach((id) => $(id).addEventListener("change", readSettingsForm));
+["setSize", "setTint", "setFont", "setVoice", "setRate", "setPlan", "setModel"].forEach((id) => $(id).addEventListener("change", readSettingsForm));
 $("testVoice").addEventListener("click", () => {
   readSettingsForm();
   if (settings.voice.startsWith("ai:") && !settings.openaiKey) {
@@ -1839,6 +1931,7 @@ if (sharedText) {
 
 applyLook();
 renderModes();
+renderPlan();
 renderTheirs();
 renderPeople();
 renderPhrases();

@@ -15,12 +15,12 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
-  <link rel="stylesheet" href="styles.css?v=13">
+  <link rel="stylesheet" href="styles.css?v=14">
 </head>
 <body>
   <div class="app">
     <header class="top">
-      <h1 class="brand">Say It</h1>
+      <h1 class="brand">Say It <span class="plan-badge" id="planBadge">Plus</span></h1>
       <button class="icon-btn" id="openSettings" aria-label="Settings">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
         <span>Settings</span>
@@ -241,6 +241,21 @@
       <h2 id="settingsTitle">Settings</h2>
 
       <fieldset>
+        <legend>Plan</legend>
+        <label for="setPlan">Your plan</label>
+        <select id="setPlan">
+          <option value="free">Free</option>
+          <option value="plus">Plus: AU$7.95 a month</option>
+          <option value="pro">Pro: AU$19.95 a month</option>
+          <option value="custom">Custom (testing)</option>
+        </select>
+        <p class="hint" id="planAbout"></p>
+        <p class="hint" id="planUsage" hidden></p>
+        <p class="hint" id="planKeyNote" hidden>Pro's speech recognition and natural voice need a speech key (OpenAI) below. Without one, Pro uses the iPhone's own.</p>
+        <p class="hint">Test version: switching plans changes what the app does. Nobody is charged.</p>
+      </fieldset>
+
+      <fieldset>
         <legend>Look</legend>
         <label for="setSize">Text size</label>
         <select id="setSize">
@@ -285,13 +300,15 @@
         <legend>Tidying up</legend>
         <label for="setMyName">Your name (for signing emails)</label>
         <input id="setMyName" autocomplete="name">
-        <label for="setModel">AI model</label>
+        <div class="custom-only" id="customOnly">
+        <label for="setModel">AI model (Custom plan)</label>
         <select id="setModel">
           <option value="best">Best: Claude Opus (about 1¢ a message)</option>
           <option value="balanced">Balanced: Claude Sonnet (about half the cost)</option>
           <option value="cheapest">Cheapest: Claude Haiku (about 40× cheaper)</option>
         </select>
         <p class="hint">Not sure? Speak a message, then tap <strong>Compare AI</strong> to see all three side by side.</p>
+        </div>
         <p class="hint" id="usageText"></p>
         <button type="button" class="ghost small" id="resetUsage">Reset cost tally</button>
         <label for="setTidy">How much should it fix in Mate style?</label>
@@ -324,7 +341,7 @@
       </fieldset>
 
       <div class="sheet-actions">
-        <span class="hint version">Version 13</span>
+        <span class="hint version">Version 14</span>
         <button type="submit" class="primary" id="closeSettings">Done</button>
       </div>
     </form>
@@ -332,6 +349,6 @@
 
   <script src="compare.js?v=1"></script>
   <script src="calendar.js?v=1"></script>
-  <script src="app.js?v=13"></script>
+  <script src="app.js?v=14"></script>
 </body>
 </html>
