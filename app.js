@@ -30,7 +30,7 @@ const DEFAULT_SETTINGS = {
   font: "lexend",
   tidy: "normal",
   words: "",
-  mode: "mate", // mate | client | email
+  mode: "mate", // mate | client | email | calendar
   myName: "",
 };
 const DEFAULT_PHRASES = [
@@ -79,6 +79,7 @@ const state = {
   subject: "", // email subject, Email style only
   unsure: [], // words the AI wasn't sure of: { word, options }
   showChanges: false,
+  event: null, // in Calendar style: { title, date, startTime, endTime, location, notes, unsure }
   typing: false,
   busy: false,
   theirs: "", // the text they are replying to
@@ -132,6 +133,22 @@ const el = {
   checkBar: $("checkBar"),
   checkText: $("checkText"),
   changesToggle: $("changesToggle"),
+  eventCard: $("eventCard"),
+  phrasesSection: $("phrasesSection"),
+  replySection: $("replySection"),
+  eventDialog: $("eventDialog"),
+  evTitle: $("evTitle"),
+  evHint: $("evHint"),
+  evChoices: $("evChoices"),
+  evTextWrap: $("evTextWrap"),
+  evText: $("evText"),
+  evWhenWrap: $("evWhenWrap"),
+  evDate: $("evDate"),
+  evAllDay: $("evAllDay"),
+  evTimes: $("evTimes"),
+  evStart: $("evStart"),
+  evEnd: $("evEnd"),
+  calDialog: $("calDialog"),
   fixTitle: $("fixTitle"),
   fixInput: $("fixInput"),
   fixAlways: $("fixAlways"),
@@ -158,7 +175,11 @@ function setStatus(text, kind = "") {
 
 // ---------- Rendering ----------
 function currentText() {
-  return state.text;
+  return state.event ? describeEvent(state.event) : state.text;
+}
+
+function calendarMode() {
+  return !!settings.anthropicKey && settings.mode === "calendar";
 }
 
 // Wrap each word so it can be highlighted while it is read out
@@ -225,6 +246,217 @@ function renderChecked(text) {
   return changes;
 }
 
+// ---------- Calendar events ----------
+function renderEvent() {
+  const ev = state.event;
+  el.message.hidden = true;
+  el.messageEdit.hidden = true;
+  el.subject.hidden = true;
+  el.eventCard.hidden = false;
+  el.phrasesSection.hidden = true;
+  el.replySection.hidden = true;
+  el.typeBtn.hidden = true;
+  el.eventCard.textContent = "";
+  const doubtful = new Set(ev.unsure.map((u) => u.field));
+  const icons = {
+    title: "",
+    when: '<path d="M3 10h18M8 3v4M16 3v4"/><rect x="3" y="5" width="18" height="16" rx="2"/>',
+    location: '<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/>',
+    notes: '<path d="M5 4h14v16H5z"/><path d="M8 9h8M8 13h8M8 17h5"/>',
+  };
+  const placeholders = { location: "Add a place", notes: "Add notes" };
+  eventRows(ev).forEach((row) => {
+    const b = document.createElement("button");
+    b.className = "ev-row ev-" + row.key + (row.text ? "" : " empty");
+    if (row.fields.some((f) => doubtful.has(f))) b.classList.add("unsure");
+    b.dataset.row = row.key;
+    b.dataset.say = row.say;
+    if (icons[row.key]) b.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${icons[row.key]}</svg>`;
+    const span = document.createElement("span");
+    span.textContent = row.text || placeholders[row.key];
+    b.append(span);
+    b.addEventListener("click", () => openEventEdit(row.key));
+    el.eventCard.append(b);
+  });
+
+  const n = ev.unsure.length;
+  el.checkBar.hidden = !n;
+  el.checkText.textContent = `Check ${n} ${n === 1 ? "detail" : "details"} marked ?`;
+  el.changesToggle.hidden = true;
+  el.tools.hidden = false;
+  el.micLabel.textContent = "Add more";
+  el.micBtn.setAttribute("aria-label", "Speak to add more");
+  renderSend();
+}
+
+function afterEventStatus() {
+  const n = state.event.unsure.length;
+  if (n) return `I wasn't sure about ${n === 1 ? "one detail" : n + " details"}, marked with ?. Tap to check.`;
+  return "Here's your event. Check the day and time, then tap Add to Calendar.";
+}
+
+async function eventFromSpeech(dictation, current, isChange = false) {
+  const existing = current
+    ? `<current_event>\n${JSON.stringify({ ...current, unsure: undefined })}\n</current_event>\n${
+        isChange ? "They are asking for a change to this event." : "They are adding more detail to this event."
+      } Return the whole updated event.\n`
+    : "";
+  const result = await askClaude(
+    eventSystemPrompt(),
+    `${existing}<dictation>\n${dictation}\n</dictation>${knownWords()}${fixHints()}`,
+    EVENT_SCHEMA
+  );
+  if (typeof result.message === "string" && !result.date) {
+    throw new Error("The tidy-up service couldn't turn that into an event. Try saying the day and time again.");
+  }
+  return cleanEvent(result);
+}
+
+// Read the event one line at a time, highlighting each line as it's read
+function readEvent() {
+  stopSpeaking();
+  const rows = [...el.eventCard.querySelectorAll(".ev-row:not(.empty)")];
+  const reading = { event: true };
+  utterance = reading;
+  el.readLabel.textContent = "Stop reading";
+  const sayLine = (text) =>
+    new Promise((resolve) => {
+      if (usingAiVoice()) return speakWithAi(text).then(resolve, () => sayWithPhone(text, resolve));
+      sayWithPhone(text, resolve);
+    });
+  const sayWithPhone = (text, resolve) => {
+    const u = speakWithPhone(text);
+    if (!u) return resolve();
+    u.onend = u.onerror = resolve;
+  };
+  const next = async (i) => {
+    clearHighlight();
+    if (utterance !== reading) return;
+    if (i >= rows.length) {
+      utterance = null;
+      el.readLabel.textContent = "Read to me";
+      return;
+    }
+    rows[i].classList.add("on");
+    await sayLine(rows[i].dataset.say);
+    next(i + 1);
+  };
+  next(0);
+}
+
+let editingRow = null;
+
+function openEventEdit(rowKey) {
+  if (state.busy || isListening()) return;
+  stopSpeaking();
+  const ev = state.event;
+  const row = eventRows(ev).find((r) => r.key === rowKey);
+  editingRow = row;
+  const names = { title: "the title", when: "the day and time", location: "the place", notes: "the notes" };
+  el.evTitle.textContent = "Change " + names[rowKey];
+
+  const doubts = ev.unsure.filter((u) => row.fields.includes(u.field));
+  el.evHint.hidden = !doubts.length;
+  el.evHint.textContent = "I wasn't sure about this. Tap the speaker to hear a choice, then tap the one you meant.";
+  el.evChoices.textContent = "";
+  doubts.forEach((u) =>
+    u.options.forEach((option) => {
+      const shown = formatField(u.field, option);
+      const label = u.field === "endTime" ? "Ends " + shown : u.field === "startTime" ? "Starts " + shown : shown;
+      addEventChoice(label, () => {
+        ev[u.field] = option;
+        resolveDoubt(u.field);
+      });
+    })
+  );
+
+  const isWhen = rowKey === "when";
+  el.evWhenWrap.hidden = !isWhen;
+  el.evTextWrap.hidden = isWhen;
+  if (isWhen) {
+    el.evDate.value = ev.date;
+    el.evAllDay.checked = !ev.startTime;
+    el.evStart.value = ev.startTime || "09:00";
+    el.evEnd.value = ev.endTime || "10:00";
+    el.evTimes.hidden = el.evAllDay.checked;
+  } else {
+    el.evText.value = ev[rowKey];
+  }
+  el.eventDialog.showModal();
+}
+
+function addEventChoice(label, choose) {
+  const row = document.createElement("div");
+  row.className = "choice";
+  const hear = document.createElement("button");
+  hear.type = "button";
+  hear.className = "hear";
+  hear.setAttribute("aria-label", `Hear "${label}"`);
+  hear.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>';
+  hear.addEventListener("click", () => speak(label));
+  const pick = document.createElement("button");
+  pick.type = "button";
+  pick.className = "pick";
+  pick.textContent = label;
+  pick.addEventListener("click", () => {
+    choose();
+    el.eventDialog.close();
+    finishEventEdit();
+  });
+  row.append(hear, pick);
+  el.evChoices.append(row);
+}
+
+function resolveDoubt(...fields) {
+  state.event.unsure = state.event.unsure.filter((u) => !fields.includes(u.field));
+}
+
+function saveEventEdit() {
+  const ev = state.event;
+  if (editingRow.key === "when") {
+    if (el.evDate.value) ev.date = el.evDate.value;
+    ev.startTime = el.evAllDay.checked ? "" : el.evStart.value;
+    ev.endTime = el.evAllDay.checked ? "" : el.evEnd.value;
+  } else {
+    ev[editingRow.key] = el.evText.value.trim();
+  }
+  resolveDoubt(...editingRow.fields);
+  state.event = { ...cleanEvent(ev), unsure: ev.unsure };
+  finishEventEdit();
+}
+
+function finishEventEdit() {
+  editingRow = null;
+  setStatus(state.event.unsure.length ? afterEventStatus() : "Done. Check it, then tap Add to Calendar.");
+  renderMessage();
+}
+
+function addToPhoneCalendar() {
+  const ics = icsText(state.event);
+  if (isIOS) {
+    // iPhone shows its own "Add to Calendar" screen for calendar files opened like this
+    window.location.href = "data:text/calendar;charset=utf-8," + encodeURIComponent(ics);
+  } else {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
+    a.download = (state.event.title.replace(/[^\w ]+/g, "").trim() || "event") + ".ics";
+    document.body.append(a);
+    a.click();
+    a.remove();
+  }
+  setStatus(
+    isIOS
+      ? "Your calendar should ask to add the event. Tap Add. If nothing happens, try Google Calendar or tap Copy."
+      : "The event file has been saved. Open it to add it to your calendar."
+  );
+}
+
+function addToGoogleCalendar() {
+  const url = googleCalendarUrl(state.event);
+  if (!window.open(url, "_blank")) window.location.href = url;
+  setStatus("Google Calendar is opening with the event filled in. Check it and tap Save.");
+}
+
 function checkSummary(changes) {
   const n = state.unsure.length;
   if (n) return `Check ${n} ${n === 1 ? "word" : "words"} marked ?`;
@@ -234,6 +466,11 @@ function checkSummary(changes) {
 }
 
 function renderMessage() {
+  if (state.event) return renderEvent();
+  el.eventCard.hidden = true;
+  el.phrasesSection.hidden = calendarMode();
+  el.replySection.hidden = calendarMode();
+  el.typeBtn.hidden = false;
   const text = currentText();
   el.message.textContent = "";
   el.subject.hidden = !(text && state.subject);
@@ -267,6 +504,11 @@ function renderSend() {
   const text = state.typing ? el.messageEdit.value.trim() : currentText();
   const person = people[state.to];
   el.sendBtn.disabled = !text || state.busy;
+  if (calendarMode()) {
+    el.sendBtn.disabled = !state.event || state.busy;
+    el.sendLabel.textContent = "Add to Calendar";
+    return;
+  }
   el.sendLabel.textContent = emailing() ? "Email" : person ? `Send to ${person.name}` : "Send";
 }
 
@@ -293,13 +535,21 @@ async function setMode(mode) {
   store.set("settings", settings);
   renderModes();
   renderSend();
-  if (!state.original) return;
+  if (!state.original) return renderMessage();
   // Rewrite what they said in the new style
   stopSpeaking();
-  setBusy(true, "Rewriting…");
+  setBusy(true, mode === "calendar" ? "Working out the event…" : "Rewriting…");
   try {
+    if (mode === "calendar") {
+      state.event = await eventFromSpeech(state.original, null);
+      setBusy(false);
+      setStatus(afterEventStatus());
+      renderMessage();
+      if (settings.autoRead) readAloud();
+      return;
+    }
     const result = await tidy(state.original);
-    Object.assign(state, { text: result.message, subject: result.subject, unsure: result.unsure, showChanges: false });
+    Object.assign(state, { text: result.message, subject: result.subject, unsure: result.unsure, showChanges: false, event: null });
     setBusy(false);
     setStatus(afterTidyStatus());
     renderMessage();
@@ -508,10 +758,11 @@ function stopSpeaking() {
 }
 
 function clearHighlight() {
-  document.querySelectorAll(".w.on").forEach((w) => w.classList.remove("on"));
+  document.querySelectorAll(".w.on, .ev-row.on").forEach((w) => w.classList.remove("on"));
 }
 
 function readAloud(container = el.message, text = currentText(), label = el.readLabel) {
+  if (state.event && container === el.message) return readEvent();
   if (!text) return;
   if (state.typing) toggleTyping();
   stopSpeaking();
@@ -722,6 +973,16 @@ async function handleHeard(heard) {
     return;
   }
   try {
+    if (calendarMode()) {
+      setBusy(true, "Working out the event…");
+      state.event = await eventFromSpeech(heard, state.event, listenPurpose === "change");
+      state.original = state.original ? state.original + " " + heard : heard;
+      setBusy(false);
+      setStatus(afterEventStatus());
+      renderMessage();
+      if (settings.autoRead) readAloud();
+      return;
+    }
     if (listenPurpose === "change") {
       setBusy(true, "Changing your message…");
       state.text = await changeMessage(state.text, heard);
@@ -1134,6 +1395,13 @@ function smsLink(number, body) {
 }
 
 function send() {
+  if (calendarMode()) {
+    if (!state.event) return;
+    stopSpeaking();
+    $("calPhoneLabel").textContent = isIOS ? "iPhone Calendar" : "Phone calendar";
+    el.calDialog.showModal();
+    return;
+  }
   if (state.typing) toggleTyping();
   const text = currentText();
   if (!text) return;
@@ -1340,7 +1608,7 @@ el.changesToggle.addEventListener("click", () => {
 el.modeBtns.forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode)));
 el.clearBtn.addEventListener("click", () => {
   stopSpeaking();
-  Object.assign(state, { text: "", original: "", subject: "", unsure: [], showChanges: false, typing: false, theirs: "" });
+  Object.assign(state, { text: "", original: "", subject: "", unsure: [], showChanges: false, event: null, typing: false, theirs: "" });
   setStatus("");
   renderTheirs();
   renderMessage();
@@ -1390,6 +1658,22 @@ $("fixTypeBtn").addEventListener("click", () => {
   el.fixInput.setSelectionRange(el.fixInput.value.length, el.fixInput.value.length);
 });
 $("cancelFix").addEventListener("click", () => el.fixDialog.close());
+$("evForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  saveEventEdit();
+  el.eventDialog.close();
+});
+$("evCancel").addEventListener("click", () => el.eventDialog.close());
+el.evAllDay.addEventListener("change", () => (el.evTimes.hidden = el.evAllDay.checked));
+$("calPhone").addEventListener("click", () => {
+  el.calDialog.close();
+  addToPhoneCalendar();
+});
+$("calGoogle").addEventListener("click", () => {
+  el.calDialog.close();
+  addToGoogleCalendar();
+});
+$("calCancel").addEventListener("click", () => el.calDialog.close());
 el.fixDialog.addEventListener("close", () => {
   if (isListening() && listenPurpose === "word") stopListening();
 });

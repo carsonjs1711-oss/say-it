@@ -263,11 +263,11 @@ svg { width: 1.4em; height: 1.4em; fill: none; stroke: currentColor; stroke-widt
 /* Style picker */
 .modes { display: flex; flex-direction: column; gap: 8px; }
 .modes .label { margin: 0; }
-.mode-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.mode-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .mode {
   display: flex; flex-direction: column; align-items: center; gap: 2px;
   border: 2px solid var(--line); background: var(--surface); border-radius: 14px;
-  padding: 10px 6px; line-height: 1.2; text-align: center;
+  padding: 10px 4px; line-height: 1.2; text-align: center; min-width: 0;
 }
 .mode strong { font-size: 1rem; font-weight: 600; }
 .mode span { font-size: 0.75rem; color: var(--muted); }
@@ -309,3 +309,32 @@ svg { width: 1.4em; height: 1.4em; fill: none; stroke: currentColor; stroke-widt
 .voice-row select { flex: 1; min-width: 0; }
 .voice-row .ghost { flex: none; }
 .modes.locked .mode { opacity: 0.55; }
+.mode strong { font-size: 0.95rem; }
+@media (max-width: 360px) { .mode-row { grid-template-columns: repeat(2, 1fr); } }
+
+/* Calendar event */
+.event-card { display: flex; flex-direction: column; gap: 6px; }
+.ev-row {
+  display: flex; align-items: flex-start; gap: 12px; width: 100%;
+  border: none; background: none; border-radius: 12px; padding: 8px 10px; margin: 0 -10px;
+  text-align: left; font-size: calc(var(--msg-size) * 0.75); line-height: 1.4; overflow-wrap: anywhere;
+}
+.ev-row svg { margin-top: 0.15em; color: var(--accent); }
+.ev-row span { min-width: 0; }
+.ev-row.ev-title { font-size: var(--msg-size); font-weight: 600; }
+.ev-row.empty { color: var(--muted); font-size: 0.95rem; }
+.ev-row.on { background: var(--highlight); }
+.ev-row.unsure span { outline: 2px dashed var(--fix); outline-offset: 3px; border-radius: 6px; }
+.ev-row.unsure span::after {
+  content: "?"; display: inline-block; margin-left: 6px; padding: 0 6px;
+  font-size: 0.7em; font-weight: 700; vertical-align: super; line-height: 1.5;
+  border-radius: 999px; background: var(--fix); color: var(--surface);
+}
+.ev-label { font-size: 0.95rem; font-weight: 500; }
+#evTextWrap, .ev-when { display: flex; flex-direction: column; gap: 6px; }
+#evText, .ev-when input:not([type="checkbox"]) {
+  width: 100%; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); padding: 12px; font-size: 1rem;
+}
+.ev-times { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ev-times > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.cal-btn { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 16px; font-size: 1.05rem; }

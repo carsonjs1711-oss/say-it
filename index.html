@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
-  <link rel="stylesheet" href="styles.css?v=11">
+  <link rel="stylesheet" href="styles.css?v=12">
 </head>
 <body>
   <div class="app">
@@ -32,7 +32,7 @@
       <div class="people" id="people" role="list"></div>
     </section>
 
-    <section class="reply" aria-labelledby="replyLabel">
+    <section class="reply" id="replySection" aria-labelledby="replyLabel">
       <h2 id="replyLabel" class="label">Replying to a text?</h2>
       <button class="wide-btn paste-btn" id="pasteTheirs">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6v3H9z"/><path d="M15 5h3v16H6V5h3"/><path d="M9 12h6M9 16h4"/></svg>
@@ -65,13 +65,16 @@
       <h2 id="modesLabel" class="label">Style</h2>
       <div class="mode-row" role="radiogroup" aria-labelledby="modesLabel">
         <button class="mode" role="radio" data-mode="mate">
-          <strong>Mate</strong><span>Casual text</span>
+          <strong>Mate</strong><span>Casual</span>
         </button>
         <button class="mode" role="radio" data-mode="client">
-          <strong>Client</strong><span>Polite, proper</span>
+          <strong>Client</strong><span>Polite</span>
         </button>
         <button class="mode" role="radio" data-mode="email">
-          <strong>Email</strong><span>Hi… Thanks…</span>
+          <strong>Email</strong><span>Hi… Thanks</span>
+        </button>
+        <button class="mode" role="radio" data-mode="calendar">
+          <strong>Calendar</strong><span>Add event</span>
         </button>
       </div>
     </section>
@@ -79,6 +82,7 @@
     <section class="message-wrap" aria-label="Your message">
       <p class="subject" id="subject" hidden></p>
       <div class="message" id="message" aria-live="polite"></div>
+      <div class="event-card" id="eventCard" aria-live="polite" hidden></div>
       <div class="check-bar" id="checkBar" hidden>
         <span id="checkText"></span>
         <button id="changesToggle" aria-pressed="false">Show what changed</button>
@@ -110,7 +114,7 @@
       </div>
     </section>
 
-    <section class="phrases" aria-labelledby="phrasesLabel">
+    <section class="phrases" id="phrasesSection" aria-labelledby="phrasesLabel">
       <h2 id="phrasesLabel" class="label">Quick messages</h2>
       <div class="chips" id="phrases"></div>
     </section>
@@ -166,6 +170,51 @@
       <label class="check"><input type="checkbox" id="fixAlways"> Always fix this word</label>
       <div class="sheet-actions">
         <button type="button" class="ghost" id="cancelFix">Cancel</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Change one detail of an event -->
+  <dialog id="eventDialog" class="sheet" aria-labelledby="evTitle">
+    <form class="fix-sheet" id="evForm">
+      <h2 id="evTitle">Change</h2>
+      <p class="hint" id="evHint" hidden></p>
+      <div class="choices" id="evChoices"></div>
+      <div id="evTextWrap">
+        <label for="evText" class="ev-label">Type it</label>
+        <input id="evText" autocomplete="off">
+      </div>
+      <div class="ev-when" id="evWhenWrap">
+        <label for="evDate" class="ev-label">Date</label>
+        <input id="evDate" type="date">
+        <label class="check"><input type="checkbox" id="evAllDay"> All day</label>
+        <div class="ev-times" id="evTimes">
+          <div><label for="evStart" class="ev-label">Starts</label><input id="evStart" type="time"></div>
+          <div><label for="evEnd" class="ev-label">Ends</label><input id="evEnd" type="time"></div>
+        </div>
+      </div>
+      <p class="hint">Or close this and tap <strong>Change it</strong> to say what to change.</p>
+      <div class="sheet-actions">
+        <button type="button" class="ghost" id="evCancel">Cancel</button>
+        <button type="submit" class="primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Which calendar -->
+  <dialog id="calDialog" class="sheet" aria-labelledby="calTitle">
+    <div class="fix-sheet">
+      <h2 id="calTitle">Add to which calendar?</h2>
+      <button type="button" class="wide-btn cal-btn" id="calPhone">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+        <span id="calPhoneLabel">iPhone Calendar</span>
+      </button>
+      <button type="button" class="wide-btn cal-btn" id="calGoogle">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M12 13v5M9.5 15.5h5"/></svg>
+        <span>Google Calendar</span>
+      </button>
+      <div class="sheet-actions">
+        <button type="button" class="ghost" id="calCancel">Cancel</button>
       </div>
     </div>
   </dialog>
@@ -250,13 +299,14 @@
       </fieldset>
 
       <div class="sheet-actions">
-        <span class="hint version">Version 11</span>
+        <span class="hint version">Version 12</span>
         <button type="submit" class="primary" id="closeSettings">Done</button>
       </div>
     </form>
   </dialog>
 
   <script src="compare.js?v=1"></script>
-  <script src="app.js?v=11"></script>
+  <script src="calendar.js?v=1"></script>
+  <script src="app.js?v=12"></script>
 </body>
 </html>
