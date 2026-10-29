@@ -338,3 +338,14 @@ svg { width: 1.4em; height: 1.4em; fill: none; stroke: currentColor; stroke-widt
 .ev-times { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .ev-times > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .cal-btn { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 16px; font-size: 1.05rem; }
+
+/* Comparing AI models */
+.compare-list { display: flex; flex-direction: column; gap: 12px; }
+.compare-card { border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.compare-card.current { border: 2px solid var(--accent); }
+.compare-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.compare-text { margin: 0; font-size: 1.05rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.compare-text.busy { color: var(--muted); }
+.compare-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.compare-actions button { padding: 8px 16px; }
+.ghost.small { align-self: flex-start; padding: 6px 14px; font-size: 0.85rem; }

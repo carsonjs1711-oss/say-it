@@ -479,14 +479,13 @@ async function tidy(raw) {
       "content-type": "application/json",
       "x-api-key": settings.anthropicKey,
       "anthropic-version": "2023-06-01",
-      "anthropic-beta": "server-side-fallback-2026-07-01",
       "anthropic-dangerous-direct-browser-access": "true",
     },
     body: JSON.stringify({
-      model: "claude-opus-5-5",
+      // Same model choice as the app; refusal fallbacks are left off so every model accepts the request
+      model: { balanced: "claude-sonnet-5-5", cheapest: "claude-haiku-5-5" }[settings.model] || "claude-opus-5-5",
       max_tokens: 4000,
       output_config: { effort: "low" },
-      fallbacks: "default",
       system: `You tidy up text messages that a person with dyslexia has dictated by voice.
 Fix misheard words, spelling, punctuation and capital letters. Keep their own words, tone and meaning; do not make it formal or add anything.
 If they say punctuation out loud, apply it. If they correct themselves while speaking, keep only the correction.

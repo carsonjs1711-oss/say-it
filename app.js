@@ -31,6 +31,7 @@ const DEFAULT_SETTINGS = {
   tidy: "normal",
   words: "",
   mode: "mate", // mate | client | email | calendar
+  model: "best", // best | balanced | cheapest, see AI_MODELS
   myName: "",
 };
 const DEFAULT_PHRASES = [
@@ -57,6 +58,25 @@ const DEFAULT_FIXES = {
   qa: "QA",
   pc: "PC",
 };
+// The Claude models Say It can use, with prices in US dollars per million tokens.
+// Refusal fallbacks are only offered on Opus and Sonnet.
+const AI_MODELS = {
+  best: { id: "claude-opus-5-5", name: "Best", fullName: "Claude Opus 5.5", input: 4, output: 20, fallbacks: true },
+  balanced: { id: "claude-sonnet-5-5", name: "Balanced", fullName: "Claude Sonnet 5.5", input: 2, output: 10, fallbacks: true },
+  cheapest: { id: "claude-haiku-5-5", name: "Cheapest", fullName: "Claude Haiku 5.5", input: 0.1, output: 0.5, fallbacks: false },
+};
+
+// What the AI has cost on this phone, per model: { best: { n, usd }, ... }
+const aiUsage = store.get("aiUsage", {});
+
+// US money, readable at any size: "0.04¢", "1.2¢", "$0.35"
+function formatCents(usd) {
+  const cents = usd * 100;
+  if (cents < 0.01) return "under 0.01¢";
+  if (cents < 0.1) return cents.toFixed(2) + "¢";
+  return cents < 10 ? cents.toFixed(1) + "¢" : "$" + usd.toFixed(2);
+}
+
 // Building and trade words, so the AI and speech service spell them right. Only used as
 // hints: they never swap words by themselves, so "group" never turns into "grout".
 const TRADE_WORDS = [
@@ -149,6 +169,9 @@ const el = {
   evStart: $("evStart"),
   evEnd: $("evEnd"),
   calDialog: $("calDialog"),
+  compareBtn: $("compareBtn"),
+  compareDialog: $("compareDialog"),
+  compareList: $("compareList"),
   fixTitle: $("fixTitle"),
   fixInput: $("fixInput"),
   fixAlways: $("fixAlways"),
@@ -256,6 +279,7 @@ function renderEvent() {
   el.phrasesSection.hidden = true;
   el.replySection.hidden = true;
   el.typeBtn.hidden = true;
+  el.compareBtn.hidden = true;
   el.eventCard.textContent = "";
   const doubtful = new Set(ev.unsure.map((u) => u.field));
   const icons = {
@@ -492,6 +516,7 @@ function renderMessage() {
   el.message.hidden = state.typing;
   el.messageEdit.hidden = !state.typing;
   el.tools.hidden = !text && !state.typing;
+  el.compareBtn.hidden = !settings.anthropicKey || !state.original || calendarMode();
   el.typeBtn.setAttribute("aria-pressed", String(state.typing));
   el.typeLabel.textContent = state.typing ? "Done typing" : "Type";
 
@@ -1088,30 +1113,27 @@ function knownWords() {
   return `\nNames and words they use, spelled correctly: ${w}`;
 }
 
-// With a schema the reply is parsed JSON; without one it is plain text
-async function askClaude(system, content, schema) {
+// With a schema the reply is parsed JSON; without one it is plain text.
+// `modelKey` picks from AI_MODELS; it defaults to the one chosen in Settings.
+async function askClaude(system, content, schema, modelKey = settings.model) {
+  const model = AI_MODELS[modelKey] || AI_MODELS.best;
   const output_config = { effort: "low" };
   if (schema) output_config.format = { type: "json_schema", schema };
+  const headers = {
+    "content-type": "application/json",
+    "x-api-key": settings.anthropicKey,
+    "anthropic-version": "2023-06-01",
+    "anthropic-dangerous-direct-browser-access": "true",
+  };
+  const body = { model: model.id, max_tokens: 4000, output_config, system, messages: [{ role: "user", content }] };
+  if (model.fallbacks) {
+    headers["anthropic-beta"] = "server-side-fallback-2026-07-01";
+    body.fallbacks = "default";
+  }
+  const started = performance.now();
   let res;
   try {
-    res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": settings.anthropicKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-beta": "server-side-fallback-2026-07-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify({
-        model: "claude-opus-5-5",
-        max_tokens: 4000,
-        output_config,
-        fallbacks: "default",
-        system,
-        messages: [{ role: "user", content }],
-      }),
-    });
+    res = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers, body: JSON.stringify(body) });
   } catch {
     throw new Error("Couldn't reach the tidy-up service. Check your internet and try again.");
   }
@@ -1119,11 +1141,12 @@ async function askClaude(system, content, schema) {
   if (res.status === 429 || res.status === 529) throw new Error("The tidy-up service is busy. Try again in a minute.");
   if (res.status === 400 && schema) {
     // Structured replies not accepted: fall back to plain text, without the word checks
-    const message = await askClaude(system + "\nReply with the finished message text only.", content);
+    const message = await askClaude(system + "\nReply with the finished message text only.", content, undefined, modelKey);
     return { message, subject: "", unsure: [] };
   }
   if (!res.ok) throw new Error("The tidy-up service had a problem. Try again.");
   const data = await res.json();
+  const cost = recordUsage(modelKey, model, data.usage, performance.now() - started);
   if (data.stop_reason === "refusal") throw new Error("The tidy-up service couldn't help with this message.");
   const text = (data.content || [])
     .filter((b) => b.type === "text")
@@ -1132,11 +1155,27 @@ async function askClaude(system, content, schema) {
     .trim();
   if (!text) throw new Error("The tidy-up service sent back nothing. Try again.");
   if (!schema) return text;
+  let parsed;
   try {
-    return JSON.parse(text);
+    parsed = JSON.parse(text);
   } catch {
-    return { message: text, subject: "", unsure: [] };
+    parsed = { message: text, subject: "", unsure: [] };
   }
+  parsed.cost = cost; // { usd, ms } for this call, shown when comparing models
+  return parsed;
+}
+
+// Adds this call to the phone's cost tally and returns { usd, ms } for it
+function recordUsage(modelKey, model, usage, ms) {
+  if (!usage) return { usd: 0, ms };
+  const inputTokens = (usage.input_tokens || 0) + (usage.cache_creation_input_tokens || 0) + (usage.cache_read_input_tokens || 0);
+  const usd = (inputTokens * model.input + (usage.output_tokens || 0) * model.output) / 1e6;
+  const tally = aiUsage[modelKey] || { n: 0, usd: 0 };
+  tally.n += 1;
+  tally.usd += usd;
+  aiUsage[modelKey] = tally;
+  store.set("aiUsage", aiUsage);
+  return { usd, ms };
 }
 
 function editDistance(a, b) {
@@ -1202,7 +1241,7 @@ function basicTidy(text) {
 }
 
 // Returns { message, subject, unsure }. `current` is the email so far, when adding to one.
-async function tidy(raw, current = "") {
+async function tidy(raw, current = "", modelKey = settings.model) {
   if (!settings.anthropicKey) return { message: basicTidy(raw), subject: "", unsure: [] };
   const style = settings.mode === "mate" && settings.tidy === "light" ? STYLES.mateLight : STYLES[settings.mode] || STYLES.mate;
   const person = people[state.to];
@@ -1219,12 +1258,14 @@ async function tidy(raw, current = "") {
   const result = await askClaude(
     `${TIDY_BASE}\n\n${style}\n\n${TIDY_OUTPUT}`,
     `${existing}<dictation>\n${raw}\n</dictation>${who}${me}${theirs}${knownWords()}${fixHints()}`,
-    TIDY_SCHEMA
+    TIDY_SCHEMA,
+    modelKey
   );
   return {
     message: String(result.message || "").trim(),
     subject: String(result.subject || "").trim(),
     unsure: (result.unsure || []).filter((u) => u.word && u.options?.length),
+    cost: result.cost || { usd: 0, ms: 0 },
   };
 }
 
@@ -1233,6 +1274,75 @@ function fixHints() {
   if (!entries.length) return "";
   const lines = entries.map(([heard, meant]) => `- "${heard}" usually means "${meant}"`).join("\n");
   return `\nWords the phone often mishears for this person. Use the sentence to decide; keep the heard word when it clearly fits:\n${lines}`;
+}
+
+// ---------- Comparing AI models ----------
+// Tidy what they said with every model, side by side, with what each one cost
+async function compareModels() {
+  if (!state.original || state.busy) return;
+  stopSpeaking();
+  el.compareList.textContent = "";
+  el.compareDialog.showModal();
+  await Promise.all(
+    Object.entries(AI_MODELS).map(async ([key, model]) => {
+      const card = document.createElement("div");
+      card.className = "compare-card" + (key === settings.model ? " current" : "");
+      const head = document.createElement("div");
+      head.className = "compare-head";
+      head.innerHTML = `<strong></strong><span class="hint"></span>`;
+      head.querySelector("strong").textContent = model.name + (key === settings.model ? " (yours now)" : "");
+      head.querySelector(".hint").textContent = model.fullName;
+      const body = document.createElement("p");
+      body.className = "compare-text busy";
+      body.textContent = "Working…";
+      const meta = document.createElement("p");
+      meta.className = "hint";
+      card.append(head, body, meta);
+      el.compareList.append(card);
+      try {
+        const result = await tidy(state.original, "", key);
+        const { usd, ms } = result.cost;
+        body.className = "compare-text";
+        body.textContent = result.message;
+        const doubts = result.unsure.length ? ` · ${result.unsure.length} marked ?` : "";
+        meta.textContent = `Cost ${formatCents(usd)} · ${(ms / 1000).toFixed(1)} seconds${doubts}`;
+        const actions = document.createElement("div");
+        actions.className = "compare-actions";
+        const hear = document.createElement("button");
+        hear.type = "button";
+        hear.className = "ghost";
+        hear.textContent = "Read it";
+        hear.addEventListener("click", () => speak(result.message));
+        const use = document.createElement("button");
+        use.type = "button";
+        use.className = "primary";
+        use.textContent = "Use this";
+        use.addEventListener("click", () => {
+          Object.assign(state, { text: result.message, subject: result.subject, unsure: result.unsure, showChanges: false });
+          el.compareDialog.close();
+          setStatus(`Using the ${model.name} version. To always use ${model.name}, choose it in Settings → AI model.`);
+          renderMessage();
+        });
+        actions.append(hear, use);
+        card.append(actions);
+      } catch (err) {
+        body.className = "compare-text";
+        body.textContent = err.message;
+      }
+    })
+  );
+}
+
+function renderUsage() {
+  const lines = Object.entries(AI_MODELS)
+    .filter(([key]) => aiUsage[key]?.n)
+    .map(([key, model]) => {
+      const { n, usd } = aiUsage[key];
+      return `${model.name}: ${n} ${n === 1 ? "message" : "messages"}, ${formatCents(usd)} in total, about ${formatCents(usd / n)} each`;
+    });
+  $("usageText").textContent = lines.length
+    ? "AI cost on this phone (US money): " + lines.join(". ") + "."
+    : "AI cost on this phone: nothing used yet.";
 }
 
 // ---------- Fixing one word ----------
@@ -1528,6 +1638,7 @@ const settingFields = {
   setAutoRead: "autoRead",
   setRate: "rate",
   setVoice: "voice",
+  setModel: "model",
   setSize: "size",
   setTint: "tint",
   setFont: "font",
@@ -1572,6 +1683,7 @@ function openSettings() {
   if (!$("setVoice").value) $("setVoice").value = "sys:auto";
   renderPeopleList();
   renderFixesList();
+  renderUsage();
   $("settingsDialog").showModal();
 }
 
@@ -1674,6 +1786,13 @@ $("calGoogle").addEventListener("click", () => {
   addToGoogleCalendar();
 });
 $("calCancel").addEventListener("click", () => el.calDialog.close());
+el.compareBtn.addEventListener("click", compareModels);
+$("compareClose").addEventListener("click", () => el.compareDialog.close());
+$("resetUsage").addEventListener("click", () => {
+  Object.keys(aiUsage).forEach((k) => delete aiUsage[k]);
+  store.set("aiUsage", aiUsage);
+  renderUsage();
+});
 el.fixDialog.addEventListener("close", () => {
   if (isListening() && listenPurpose === "word") stopListening();
 });

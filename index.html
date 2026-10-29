@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
-  <link rel="stylesheet" href="styles.css?v=12">
+  <link rel="stylesheet" href="styles.css?v=13">
 </head>
 <body>
   <div class="app">
@@ -102,6 +102,10 @@
         <button class="tool" id="typeBtn">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg>
           <span id="typeLabel">Type</span>
+        </button>
+        <button class="tool" id="compareBtn" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h7v12H4zM13 6h7v12h-7z"/></svg>
+          <span>Compare AI</span>
         </button>
         <button class="tool" id="copyBtn">
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg>
@@ -219,6 +223,18 @@
     </div>
   </dialog>
 
+  <!-- Compare AI models -->
+  <dialog id="compareDialog" class="sheet" aria-labelledby="compareTitle">
+    <div class="fix-sheet">
+      <h2 id="compareTitle">Compare AI models</h2>
+      <p class="hint">The same thing you said, tidied by each model. Costs are in US dollars and come from what each one actually used.</p>
+      <div class="compare-list" id="compareList"></div>
+      <div class="sheet-actions">
+        <button type="button" class="ghost" id="compareClose">Close</button>
+      </div>
+    </div>
+  </dialog>
+
   <!-- Settings -->
   <dialog id="settingsDialog" class="sheet" aria-labelledby="settingsTitle">
     <form method="dialog" id="settingsForm">
@@ -269,6 +285,15 @@
         <legend>Tidying up</legend>
         <label for="setMyName">Your name (for signing emails)</label>
         <input id="setMyName" autocomplete="name">
+        <label for="setModel">AI model</label>
+        <select id="setModel">
+          <option value="best">Best: Claude Opus (about 1¢ a message)</option>
+          <option value="balanced">Balanced: Claude Sonnet (about half the cost)</option>
+          <option value="cheapest">Cheapest: Claude Haiku (about 40× cheaper)</option>
+        </select>
+        <p class="hint">Not sure? Speak a message, then tap <strong>Compare AI</strong> to see all three side by side.</p>
+        <p class="hint" id="usageText"></p>
+        <button type="button" class="ghost small" id="resetUsage">Reset cost tally</button>
         <label for="setTidy">How much should it fix in Mate style?</label>
         <select id="setTidy">
           <option value="light">Just spelling and full stops</option>
@@ -299,7 +324,7 @@
       </fieldset>
 
       <div class="sheet-actions">
-        <span class="hint version">Version 12</span>
+        <span class="hint version">Version 13</span>
         <button type="submit" class="primary" id="closeSettings">Done</button>
       </div>
     </form>
@@ -307,6 +332,6 @@
 
   <script src="compare.js?v=1"></script>
   <script src="calendar.js?v=1"></script>
-  <script src="app.js?v=12"></script>
+  <script src="app.js?v=13"></script>
 </body>
 </html>
